@@ -1,0 +1,3 @@
+inv_step,inv_step_start_year,resource,technology_label,installed_inverter_capacity_ac_kw,specific_investment_cost_per_kw_ac,lifetime_years,fixed_om_share_per_year
+1,2026,Solar,Solar PV,237.30699688998092,180.0,15.0,0.01
+2,2031,Solar,Solar PV,0.0,180.0,15.0,0.01
