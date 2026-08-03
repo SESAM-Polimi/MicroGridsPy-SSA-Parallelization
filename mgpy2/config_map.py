@@ -80,14 +80,18 @@ class ThesisConfig:
     battery_max_installable_capacity_kwh: float = 1e6
     battery_inverter_specific_investment_cost_per_kw: float = 300.0  # 0.3 €/W  # THESIS-MAP
     battery_inverter_lifetime_years: int = 8
+    # Battery power/energy ratio (c-rate, 1/h). CRITICAL: the new engine treats a
+    # null/omitted c-rate as 0, which forces the battery inverter power to zero and
+    # silently disables the battery (=> PV-only, infeasible off-grid at night).
+    # The thesis sets these via charge/discharge TIMES (a.yaml maximum_battery_charge_time
+    # = 5 h -> 0.2/h; maximum_battery_discharge_time = 4 h -> 0.25/h).
+    battery_max_charge_c_rate: float = 1.0 / 5.0     # THESIS-MAP: 1 / max charge time (5 h)
+    battery_max_discharge_c_rate: float = 1.0 / 4.0  # THESIS-MAP: 1 / max discharge time (4 h)
 
-    # --- feasibility / system-completeness knobs -------------------------------
-    # NOTE: a pure PV+battery, off-grid, zero-lost-load system (the thesis design,
-    # a.yaml system_configuration=1) is INFEASIBLE under the new engine's
-    # formulation, though it solved in the old engine. Choose ONE of:
-    #   * include_generator=True  -> add a diesel backup (changes system design), or
-    #   * max_lost_load_fraction>0 -> allow unserved energy at a penalty (changes LCOE).
-    # Both are exposed so the reproduction choice is explicit, not silent.
+    # --- optional system extensions (NOT required for feasibility) --------------
+    # A pure PV+battery, off-grid, zero-lost-load system (the thesis design) is
+    # feasible once the battery c-rates above are set. These remain available if you
+    # want to add a diesel backup or allow unserved energy for sensitivity studies.
     include_generator: bool = False
     gen_specific_investment_cost_per_kw: float = 500.0   # 0.5 €/W
     gen_wacc: float = 0.10
@@ -252,6 +256,9 @@ def _patch_battery_yaml(path: Path, cfg: ThesisConfig) -> None:
         "depth_of_discharge": cfg.battery_depth_of_discharge,
         "initial_soc": cfg.battery_initial_soc,
         "max_installable_capacity_kwh": cfg.battery_max_installable_capacity_kwh,
+        # MUST be finite/positive — null is read as 0 and disables the battery.
+        "max_charge_c_rate": cfg.battery_max_charge_c_rate,
+        "max_discharge_c_rate": cfg.battery_max_discharge_c_rate,
     })
     path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
 

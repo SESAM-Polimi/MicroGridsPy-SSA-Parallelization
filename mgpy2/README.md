@@ -39,16 +39,19 @@ watch with `./hpc/monitor_jobs.sh`. Aggregate with `python -m mgpy2.postprocess`
 Paths are repo-relative and overridable via env vars (see `paths.py`):
 `MGPY2_NEW_ENGINE`, `MGPY2_OLD_ENGINE`, `MGPY2_PROJECTS_DIR`, `MGPY2_DATA_SHEET`.
 
-## TWO OPEN DECISIONS (flagged, not silently resolved)
+## Battery c-rate (resolved — was the "infeasibility")
 
-1. **Feasibility of PV+battery-only.** The thesis system (PV+battery, no generator,
-   0 lost load) is INFEASIBLE under the new engine's formulation, though it solved
-   in the old one. Choose a feasibility option on `ThesisConfig` / CLI:
-   - `--include-generator` (adds a diesel backup — changes the system design), or
-   - `--max-lost-load 0.05 --lost-load-cost <c>` (allows unserved energy — changes LCOE).
-   Default is the faithful-but-infeasible PV+battery-only; pick one before a real run.
+The thesis system (PV+battery, off-grid, 0 lost load, no generator) is feasible and is
+the default. Earlier it appeared infeasible because the battery charge/discharge
+**c-rates** were left null, and the new engine reads a null c-rate as **0**, which forces
+the battery inverter power to zero and disables the battery. `config_map.ThesisConfig`
+now sets them from the thesis charge/discharge times
+(`battery_max_charge_c_rate = 1/5 = 0.2`, `battery_max_discharge_c_rate = 1/4 = 0.25`).
+Optional `--include-generator` / `--max-lost-load` remain for sensitivity studies only.
 
-2. **Demand-growth quirk.** The old `apply_demand_growth` divides by 100, so YAML
+## ONE OPEN DECISION
+
+1. **Demand-growth quirk.** The old `apply_demand_growth` divides by 100, so YAML
    `demand_growth: 0.03` grew households/hospitals at 0.03%/yr while schools grew at
    3%/yr. `PrepConfig.demand_growth_mode` selects `"thesis_faithful"` (default,
    reproduces this exactly — Year-1 demand matches the thesis to the decimal) or

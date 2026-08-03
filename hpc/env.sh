@@ -20,10 +20,10 @@ MAX_CONCURRENT="${MAX_CONCURRENT:-64}"
 # --- model / pipeline options ---
 SOLVER="${SOLVER:-highs}"
 HORIZON="${HORIZON:-20}"
-# Feasibility (choose ONE — PV+battery only is infeasible in the new engine):
-#   "--include-generator"                or
-#   "--max-lost-load 0.05 --lost-load-cost 5.0"
-FEASIBILITY_FLAGS="${FEASIBILITY_FLAGS:---include-generator}"
+# System extensions (OPTIONAL). PV+battery only is feasible by default (the thesis
+# design), so leave this EMPTY for a faithful reproduction. Set it only for
+# sensitivity studies:  "--include-generator"  or  "--max-lost-load 0.05 --lost-load-cost 5.0"
+FEASIBILITY_FLAGS="${FEASIBILITY_FLAGS:-}"
 # RUN_MODE: "full" = prepare(PVGIS)+solve in each task (needs internet on nodes);
 #           "solve-only" = solve pre-staged inputs (run hpc prefetch first, offline nodes).
 RUN_MODE="${RUN_MODE:-full}"

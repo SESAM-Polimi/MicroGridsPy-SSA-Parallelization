@@ -47,12 +47,9 @@ python -m mgpy2.postprocess --sample advanced_sample.csv
 
 HPC (submit from repo root): `./hpc/submit_jobs.sh`, monitor with `./hpc/monitor_jobs.sh`.
 
-## Two decisions before a production run
+## One decision before a production run
 
-1. **Feasibility** — a pure PV+battery, off-grid, zero-lost-load system (the thesis
-   design) is *infeasible* under the new engine's formulation. Choose a backup on the
-   CLI: `--include-generator` **or** `--max-lost-load 0.05 --lost-load-cost <c>`.
-2. **Demand growth** — the old code grew households at `demand_growth/100` (a quirk);
+- **Demand growth** — the old code grew households at `demand_growth/100` (a quirk);
    `mgpy2` reproduces this faithfully by default (`demand_growth_mode`), with a
    `consistent` option. Year-1 demand matches the thesis to the decimal.
 

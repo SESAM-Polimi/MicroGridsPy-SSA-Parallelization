@@ -34,22 +34,23 @@ SGE_NODES="node-1-3|node-1-6|node-1-7|node-1-8"   # or "" for no node restrictio
 H_VMEM="8G"                       # 20-yr hourly model needs headroom (raise if OOM)
 H_RT="06:00:00"
 MAX_CONCURRENT="64"
-FEASIBILITY_FLAGS="--include-generator"    # REQUIRED — see §2
+FEASIBILITY_FLAGS=""              # empty = thesis PV+battery design (see §2)
 RUN_MODE="full"                   # "full" (nodes have internet) or "solve-only" (see §3)
 ```
 
-## 2. Choose a feasibility mode (REQUIRED — do not skip)
+## 2. System options (optional)
 
-A pure PV+battery, off-grid, zero-lost-load system is **infeasible** in the new
-engine, so a run with no feasibility flag makes **every cluster fail**. Pick one in
-`hpc/env.sh`:
+The thesis design — PV+battery, off-grid, zero lost-load — is feasible out of the box
+(the battery c-rates are set correctly in `config_map.py`). For a faithful
+reproduction leave `FEASIBILITY_FLAGS=""` in `hpc/env.sh`.
 
-- `FEASIBILITY_FLAGS="--include-generator"` — add a diesel backup (changes system design), or
+Only for sensitivity studies you may add:
+- `FEASIBILITY_FLAGS="--include-generator"` — add a diesel backup, or
 - `FEASIBILITY_FLAGS="--max-lost-load 0.05 --lost-load-cost 5.0"` — allow unserved energy.
 
-> The feasibility choice is written into each project's config at PREPARE time, so it
-> must be present whenever inputs are (re)generated — i.e. on the array task in `full`
-> mode, or on the prefetch step in `solve-only` mode (§3).
+> These options are applied at PREPARE time (written into each project's config), so if
+> you use them, set them on the array task in `full` mode or on the prefetch step in
+> `solve-only` mode (§3).
 
 ## 3. Internet on compute nodes? (PVGIS)
 
@@ -61,7 +62,7 @@ Each cluster downloads solar data from PVGIS over the internet.
 
 ```bash
 # on the LOGIN node (has internet) — parallel PVGIS/demand prefetch for the whole country
-python orchestrator.py --csv advanced_sample.csv --prepare-only --workers 8 --include-generator
+python orchestrator.py --csv advanced_sample.csv --prepare-only --workers 8
 # then set RUN_MODE="solve-only" in hpc/env.sh and submit (§5)
 ```
 
@@ -119,7 +120,10 @@ sizing in `capacity_by_year.csv` / `design_by_step.csv`); logs in `logs/`.
    placed *after* shell commands in the old array script, so SGE ignored them. They
    are now passed on the `qsub` command line and always honoured.
 2. **Removed the buried hardcoded conda path** → single `hpc/env.sh` (with `$HOME` default).
-3. **Fixed a fatal default:** the old array ran with no feasibility flag → every job
-   infeasible. Feasibility is now explicit and required.
+3. **Fixed the real infeasibility root cause:** the battery charge/discharge c-rates
+   were left null, which the new engine reads as 0 → battery inverter power forced to 0
+   → battery disabled → PV-only, infeasible at night. `config_map.py` now sets them from
+   the thesis charge/discharge times (5 h → 0.2, 4 h → 0.25), so PV+battery works with
+   no generator or lost-load needed.
 4. **prepare/solve split** for offline compute nodes (PVGIS prefetch on the login node).
 5. Added `set -uo pipefail`, cwd-independent repo resolution, and clearer logging.
