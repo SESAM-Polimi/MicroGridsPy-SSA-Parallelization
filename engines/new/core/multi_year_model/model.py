@@ -165,7 +165,7 @@ class MultiYearModel:
     # ---------------------------------------------------------------------
     def solve_single_objective(
         self,
-        solver: str = "highs",
+        solver: str = "gurobi",
         solver_params: SolverKw | None = None,
         problem_fn: Optional[Path] = None,
         log_file_path: Optional[Path] = None,

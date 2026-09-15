@@ -9,7 +9,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 source hpc/env.sh
 
-CSV_FILE="advanced_sample.csv"
+CSV_FILE="data/sample_input_2025/ETH/advanced_sample.csv"
 [ -f "$CSV_FILE" ] || { echo "ERROR: $CSV_FILE not found in $REPO_ROOT"; exit 1; }
 
 NUM_ROWS=$(grep -v '^//' "$CSV_FILE" | tail -n +2 | wc -l | tr -d ' ')

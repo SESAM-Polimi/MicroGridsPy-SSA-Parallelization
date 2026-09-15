@@ -1,6 +1,6 @@
 #!/bin/bash
 # Monitor NEW-engine array progress (marker: reporting_summary.csv)
-CSV_FILE="advanced_sample.csv"
+CSV_FILE="/global-scratch/flash_pool/nstevanato/MicroGridsPy-SSA-Parallelization-Ethiopia/advanced_sample.csv"
 RESULTS_DIR="projects"
 TOTAL=$(grep -v '^//' "$CSV_FILE" | tail -n +2 | wc -l | tr -d ' ')
 COMPLETED=$(find "$RESULTS_DIR" -name "reporting_summary.csv" 2>/dev/null | wc -l | tr -d ' ')

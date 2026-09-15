@@ -7,18 +7,18 @@
 # =====================================================================
 
 # --- your conda install + env (the ONLY hardcoded path you must set) ---
-CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"     # <-- CHANGE to your conda base
-CONDA_ENV="${CONDA_ENV:-mgpy_planning}"          # env that imports BOTH engines
+CONDA_BASE="${CONDA_BASE:-home/energia/nstevanato/miniconda3}"     # <-- CHANGE to your conda base
+CONDA_ENV="${CONDA_ENV:-mgpy_clean}"          # env that imports BOTH engines
 
 # --- SGE resources (applied via qsub CLI, so they are never ignored) ---
 SGE_QUEUE="${SGE_QUEUE:-energia.q}"
-SGE_NODES="${SGE_NODES:-node-1-3|node-1-6|node-1-7|node-1-8}"  # or "" for no restriction
+SGE_NODES="${SGE_NODES:-node-1-3}"  # or "" for no restriction
 H_VMEM="${H_VMEM:-8G}"                            # 20-yr hourly model needs headroom
 H_RT="${H_RT:-06:00:00}"
-MAX_CONCURRENT="${MAX_CONCURRENT:-64}"
+MAX_CONCURRENT="${MAX_CONCURRENT:-16}"
 
 # --- model / pipeline options ---
-SOLVER="${SOLVER:-highs}"
+SOLVER="${SOLVER:-gurobi}" 
 HORIZON="${HORIZON:-20}"
 # System extensions (OPTIONAL). PV+battery only is feasible by default (the thesis
 # design), so leave this EMPTY for a faithful reproduction. Set it only for

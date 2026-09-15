@@ -100,7 +100,7 @@ def compute_demand_kwh(row: dict, cfg: PrepConfig,
             return float(default)
 
     cooling = row.get("cooling", "NC")
-    if cooling in (None, "", "nan", "NaN", "NA"):
+    if pd.isna(cooling) or str(cooling).strip() in ("", "nan", "NaN", "NA", "None"):
         cooling = "NC"
 
     faithful = (cfg.demand_growth_mode == "thesis_faithful")

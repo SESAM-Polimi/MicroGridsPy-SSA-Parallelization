@@ -3,24 +3,42 @@
 #$ -N mgpy_array
 #$ -cwd
 #$ -j y
-# =====================================================================
-# SGE array TASK — one row of advanced_sample.csv per SGE_TASK_ID.
-# Resources (queue, memory, runtime, nodes, concurrency) are set on the
-# qsub command line by submit_jobs.sh, NOT here — SGE ignores #$ options
-# that appear after the first shell command, which is a classic footgun.
-# =====================================================================
-set -uo pipefail
 
-# Resolve repo root (parent of hpc/) so this works regardless of cwd.
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+set -euo pipefail
+
+: "${SGE_O_WORKDIR:?ERROR: SGE_O_WORKDIR is not defined}"
+
+REPO_ROOT="$SGE_O_WORKDIR"
 cd "$REPO_ROOT"
-source hpc/env.sh
+
+mkdir -p "$REPO_ROOT/logs"
+
+PADDED=$(printf "%05d" "$SGE_TASK_ID")
+exec >"$REPO_ROOT/logs/${JOB_NAME}.${PADDED}.log" 2>&1
+
+echo "============================================================"
+echo "Start time:        $(date)"
+echo "Task ID:           $SGE_TASK_ID"
+echo "Node:              $(hostname)"
+echo "Repository root:   $REPO_ROOT"
+echo "Working directory: $(pwd)"
+echo "SGE workdir:       $SGE_O_WORKDIR"
+echo "============================================================"
+
+source "$REPO_ROOT/hpc/env.sh"
 activate_env
 
-mkdir -p logs
-PADDED=$(printf "%05d" "$SGE_TASK_ID")
-exec >"logs/${JOB_NAME}.${PADDED}.log" 2>&1
+echo "Conda environment: $CONDA_ENV"
+echo "Python executable: $(command -v python)"
+echo "Run mode:          $RUN_MODE"
+echo "Solver:            $SOLVER"
+echo "Horizon:           $HORIZON"
 
-echo "[$(date)] task=$SGE_TASK_ID node=$(hostname) env=$CONDA_ENV mode=$RUN_MODE"
-python -m mgpy2.run_cluster --task-id "$SGE_TASK_ID" \
-    --solver "$SOLVER" --horizon "$HORIZON" $FEASIBILITY_FLAGS $(mode_flag)
+python -m mgpy2.run_cluster \
+    --task-id "$SGE_TASK_ID" \
+    --solver "$SOLVER" \
+    --horizon "$HORIZON" \
+    $FEASIBILITY_FLAGS \
+    $(mode_flag)
+
+echo "Task completed at $(date)"

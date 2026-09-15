@@ -119,7 +119,7 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
         model = MultiYearModel(project_name=name)
         sol = model.solve_single_objective(
             solver=solver,
-            solver_params=solver_params or {"presolve": "on"},
+            solver_params=solver_params or {},
             log_file_path=paths.logs_dir / f"{solver}_solve.log",
         )
         status = str(sol.attrs.get("status", ""))
