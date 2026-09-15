@@ -104,7 +104,7 @@ def initialize_objective(
     gen_units = vars["generator_units"]           # (inv_step,)
 
     res_gen = vars["res_generation"]              # (period, year, scenario, resource)
-    fuel_cons = vars["fuel_consumption"]          # (period, year, scenario, inv_step)
+    fuel_cons = vars.get("fuel_consumption")      # (period, year, scenario, inv_step) or None (no generator)
     lost_load = vars["lost_load"]                 # (period, year, scenario)
     # Grid cost accounting uses raw PCC interchange variables; transmission
     # efficiency is applied separately in the energy balance and scope-2 terms.
@@ -164,9 +164,12 @@ def initialize_objective(
     # ------------------------------------------------------------------
     # OPEX (year, scenario) then expected value
     # ------------------------------------------------------------------
-    fuel_cost = p.fuel_cost_per_unit_fuel if p.fuel_cost_per_unit_fuel is not None else p.fuel_fuel_cost_per_unit_fuel
-    fuel_cost = _require_finite_da("fuel_cost_per_unit_fuel", fuel_cost)
-    fuel_cost_y_s = (fuel_cons * fuel_cost).sum("period").sum("inv_step")
+    if fuel_cons is not None:
+        fuel_cost = p.fuel_cost_per_unit_fuel if p.fuel_cost_per_unit_fuel is not None else p.fuel_fuel_cost_per_unit_fuel
+        fuel_cost = _require_finite_da("fuel_cost_per_unit_fuel", fuel_cost)
+        fuel_cost_y_s = (fuel_cons * fuel_cost).sum("period").sum("inv_step")
+    else:
+        fuel_cost_y_s = 0.0
 
     if on_grid:
         if grid_imp is None:
@@ -245,11 +248,14 @@ def initialize_objective(
     # ------------------------------------------------------------------
     lost_load_cost = _require_finite_da("lost_load_cost_per_kwh", p.lost_load_cost_per_kwh)
     emission_cost = _require_finite_da("emission_cost_per_kgco2e", p.emission_cost_per_kgco2e)
-    fuel_direct_kg = _require_finite_da("fuel_direct_emissions_kgco2e_per_unit_fuel", p.fuel_direct_emissions_kgco2e_per_unit_fuel)
 
     ll_cost_y_s = lost_load.sum("period") * lost_load_cost
-    direct_em_kg_y_s = (fuel_cons.sum("period") * fuel_direct_kg).sum("inv_step")
-    direct_em_cost_y_s = direct_em_kg_y_s * emission_cost
+    if fuel_cons is not None:
+        fuel_direct_kg = _require_finite_da("fuel_direct_emissions_kgco2e_per_unit_fuel", p.fuel_direct_emissions_kgco2e_per_unit_fuel)
+        direct_em_kg_y_s = (fuel_cons.sum("period") * fuel_direct_kg).sum("inv_step")
+        direct_em_cost_y_s = direct_em_kg_y_s * emission_cost
+    else:
+        direct_em_cost_y_s = 0.0
     if on_grid and grid_imp is not None and p.grid_transmission_efficiency is not None and p.grid_emissions_factor_kgco2e_per_kwh is not None:
         grid_scope2_kg_y_s = ((grid_imp * p.grid_transmission_efficiency).sum("period")) * p.grid_emissions_factor_kgco2e_per_kwh
         grid_scope2_cost_y_s = grid_scope2_kg_y_s * emission_cost

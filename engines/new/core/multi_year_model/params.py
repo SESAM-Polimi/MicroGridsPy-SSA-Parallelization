@@ -98,6 +98,18 @@ class Params:
     def is_grid_export_enabled(self) -> bool:
         return bool(((self.settings.get("grid", {}) or {}).get("allow_export", False)))
 
+    def is_generator_on(self) -> bool:
+        """A generator is 'enabled' iff its max installable capacity is positive.
+        Used to gate creation of the generator operational variables (generation,
+        fuel) exactly like `is_grid_on()` gates the grid variables."""
+        cap = self.generator_max_installable_capacity_kw
+        if cap is None:
+            return False
+        try:
+            return float(cap.max()) > 0.0
+        except Exception:
+            return False
+
 
 def get_params(ds: xr.Dataset) -> Params:
     settings = (ds.attrs or {}).get("settings", {})

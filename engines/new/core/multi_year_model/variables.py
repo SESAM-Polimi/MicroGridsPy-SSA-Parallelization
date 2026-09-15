@@ -59,6 +59,7 @@ def initialize_vars(sets: xr.Dataset, data: xr.Dataset, model: lp.Model) -> Dict
     p = get_params(data)
     on_grid = p.is_grid_on()
     allow_export = p.is_grid_export_enabled()
+    generator_on = p.is_generator_on()
     partial_load_enabled = bool((p.settings.get("generator", {}) or {}).get("partial_load_modelling_enabled", False))
     battery_loss_model = normalize_battery_loss_model(
         ((p.settings.get("battery_model", {}) or {}).get("loss_model")),
@@ -122,21 +123,25 @@ def initialize_vars(sets: xr.Dataset, data: xr.Dataset, model: lp.Model) -> Dict
         name="res_generation",
     )
 
-    # Generator generation [kWh]
-    vars["generator_generation"] = model.add_variables(
-        lower=0.0,
-        dims=("period", "year", "scenario", "inv_step"),
-        coords={"period": period, "year": year, "scenario": scenario, "inv_step": inv_step},
-        name="generator_generation",
-    )
+    # Generator generation [kWh] and fuel consumption [unit_fuel] are created ONLY when a
+    # generator is enabled (mirrors the grid variables, which exist only when on_grid).
+    # A disabled generator otherwise leaves 2 x (period x year x scenario x inv_step) free
+    # columns that appear only in the LP bounds section and bloat the model.
+    if generator_on:
+        vars["generator_generation"] = model.add_variables(
+            lower=0.0,
+            dims=("period", "year", "scenario", "inv_step"),
+            coords={"period": period, "year": year, "scenario": scenario, "inv_step": inv_step},
+            name="generator_generation",
+        )
 
-    # Fuel consumption [unit_fuel] (generic fuel unit, consistent with fuel.yaml keys)
-    vars["fuel_consumption"] = model.add_variables(
-        lower=0.0,
-        dims=("period", "year", "scenario", "inv_step"),
-        coords={"period": period, "year": year, "scenario": scenario, "inv_step": inv_step},
-        name="fuel_consumption",
-    )
+        # Fuel consumption [unit_fuel] (generic fuel unit, consistent with fuel.yaml keys)
+        vars["fuel_consumption"] = model.add_variables(
+            lower=0.0,
+            dims=("period", "year", "scenario", "inv_step"),
+            coords={"period": period, "year": year, "scenario": scenario, "inv_step": inv_step},
+            name="fuel_consumption",
+        )
 
     # Battery charge/discharge/SoC [kWh]
     vars["battery_charge"] = model.add_variables(

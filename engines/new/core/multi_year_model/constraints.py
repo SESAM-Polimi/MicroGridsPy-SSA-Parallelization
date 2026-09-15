@@ -107,14 +107,14 @@ def validate_constraint_shapes(
         if c not in sets.coords:
             raise InputValidationError(f"initialize_constraints: missing required coord in sets: '{c}'")
 
+    # NOTE: generator_generation / fuel_consumption are conditional — created only when a
+    # generator is enabled (see variables.is_generator_on). They are handled via vars.get().
     required_vars = (
         "res_units",
         "battery_units",
         "battery_inverter_power",
         "generator_units",
         "res_generation",
-        "generator_generation",
-        "fuel_consumption",
         "battery_charge",
         "battery_discharge",
         "battery_soc",
@@ -237,8 +237,8 @@ def initialize_constraints(
     gen_units = vars["generator_units"]  # (inv_step,)
 
     res_gen = vars["res_generation"]  # (period, year, scenario, resource)
-    gen_gen = vars["generator_generation"]  # (period, year, scenario, inv_step)
-    fuel_cons = vars["fuel_consumption"]  # (period, year, scenario, inv_step)
+    gen_gen = vars.get("generator_generation")  # (period, year, scenario, inv_step) or None
+    fuel_cons = vars.get("fuel_consumption")  # (period, year, scenario, inv_step) or None
     bat_ch = vars["battery_charge"]  # (period, year, scenario, inv_step)
     bat_dis = vars["battery_discharge"]  # (period, year, scenario, inv_step)
     soc = vars["battery_soc"]  # (period, year, scenario, inv_step)
@@ -291,7 +291,8 @@ def initialize_constraints(
         lifetime_years=p.generator_lifetime_years,
         degradation_rate=p.generator_capacity_degradation_rate_per_year,
     )
-    model.add_constraints(gen_gen <= gen_cap_available, name="generator_generation_cap")
+    if gen_gen is not None:
+        model.add_constraints(gen_gen <= gen_cap_available, name="generator_generation_cap")
 
     gen_max_shared = _shared_scalar_from_da("generator_max_installable_capacity_kw", gen_max_kw)
     if gen_max_shared is not None and gen_max_shared > 0.0:
@@ -301,9 +302,9 @@ def initialize_constraints(
         )
 
     # ------------------------------------------------------------------
-    # 3) Fuel-to-power relation
+    # 3) Fuel-to-power relation (only when a generator exists)
     # ------------------------------------------------------------------
-    if p.generator_fuel_curve_rel_fuel_use is not None and p.generator_eff_curve_rel_power is not None:
+    if gen_gen is not None and fuel_cons is not None and p.generator_fuel_curve_rel_fuel_use is not None and p.generator_eff_curve_rel_power is not None:
         pl_rel = p.generator_eff_curve_rel_power
         pl_fuel_rel = p.generator_fuel_curve_rel_fuel_use
         P = int(pl_rel.sizes["curve_point"])
@@ -341,7 +342,7 @@ def initialize_constraints(
             cap_seg = cap_k.expand_dims(segment=seg)
             rhs = slope * gen_k + intercept * cap_seg
             model.add_constraints(fuel_k >= rhs, name=f"fuel_to_power_partial_load_{inv_name}")
-    else:
+    elif gen_gen is not None and fuel_cons is not None:
         model.add_constraints(
             gen_gen == fuel_cons * fuel_lhv * gen_eta_full,
             name="fuel_to_power_nominal_eta",
@@ -680,9 +681,10 @@ def initialize_constraints(
             )
 
     res_sum = res_gen.sum("resource")
-    gen_sum = gen_gen.sum("inv_step")
     bat_net = (bat_dis - bat_ch).sum("inv_step")
-    lhs = res_sum + gen_sum + bat_net + ll
+    lhs = res_sum + bat_net + ll
+    if gen_gen is not None:
+        lhs = lhs + gen_gen.sum("inv_step")
 
     if on_grid and grid_imp is not None:
         lhs = lhs + (grid_imp * grid_eta)
@@ -697,7 +699,7 @@ def initialize_constraints(
     e_demand = load_demand.sum("period")  # (year, scenario)
     e_ll = ll.sum("period")  # (year, scenario)
     e_res = res_sum.sum("period")  # (year, scenario)
-    e_gen = gen_gen.sum("period").sum("inv_step")  # (year, scenario)
+    e_gen = gen_gen.sum("period").sum("inv_step") if gen_gen is not None else 0.0  # (year, scenario)
 
     if on_grid and grid_imp is not None:
         e_grid = (grid_imp * grid_eta).sum("period")
