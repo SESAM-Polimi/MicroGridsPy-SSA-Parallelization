@@ -1,0 +1,22 @@
+# Slim CLUSTER environment for MicroGridsPy-SSA.
+#
+# The solve + lean export path needs only the packages below. GIS (geopandas,
+# shapely, folium) and plotting (matplotlib, plotly) are LOCAL/OFFLINE only.
+#
+# IMPORTANT — input prep needs more: the OLD engine's archetypes.py imports
+# `streamlit` at module load, so RUN_MODE=full (prep on the node) also requires
+# `streamlit`. Two ways to keep the cluster env slim:
+#   (a) RUN_MODE=solve-only  — pre-stage inputs elsewhere; nodes never import prep; OR
+#   (b) add `streamlit` here (heavy) — or lazy-import it in the old archetypes.py.
+#
+# Create with:  conda create -n mgpy_clean -c conda-forge python=3.11 && pip install -r hpc/requirements-cluster.txt
+
+numpy
+pandas
+xarray
+pyyaml
+linopy
+highspy            # HiGHS solver (open source; default)
+pyarrow            # parquet dispatch writer (falls back to CSV if missing)
+requests           # PVGIS download during input prep (RUN_MODE=full)
+# gurobipy         # optional: only if SOLVER=gurobi (needs a licence)
