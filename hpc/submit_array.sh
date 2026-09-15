@@ -33,12 +33,14 @@ echo "Python executable: $(command -v python)"
 echo "Run mode:          $RUN_MODE"
 echo "Solver:            $SOLVER"
 echo "Horizon:           $HORIZON"
+echo "Sample:            $SAMPLE_CSV"
 
 python -m mgpy2.run_cluster \
     --task-id "$SGE_TASK_ID" \
+    --csv "$SAMPLE_CSV" \
     --solver "$SOLVER" \
     --horizon "$HORIZON" \
     $FEASIBILITY_FLAGS \
     $(mode_flag)
-
+    
 echo "Task completed at $(date)"
