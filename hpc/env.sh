@@ -10,6 +10,11 @@
 CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"     # conda base; $HOME works on every node
 CONDA_ENV="${CONDA_ENV:-mgpy_clean}"          # env that imports BOTH engines
 
+# --- which sample (country) to run: the ONLY place to change it ---
+# Path is relative to the repo root (all hpc scripts cd there first).
+SAMPLE_CSV="${SAMPLE_CSV:-data/sample_input_2025/ETH/advanced_sample.csv}"
+export SAMPLE_CSV
+
 # --- SGE resources (applied via qsub CLI, so they are never ignored) ---
 SGE_QUEUE="${SGE_QUEUE:-energia.q}"
 SGE_NODES="${SGE_NODES:-node-1-3}"  # or "" for no restriction
