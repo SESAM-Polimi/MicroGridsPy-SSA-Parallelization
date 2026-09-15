@@ -1,7 +1,7 @@
 #!/bin/bash
 # =====================================================================
 # run_local.sh — LAPTOP test runner. Emulates the SGE array WITHOUT a
-# scheduler: loops over the rows of a (small) advanced_sample.csv and
+# scheduler: loops over the rows of a (small) sample CSV and
 # runs the SAME mgpy2 pipeline used on the HPC, one cluster per "task".
 #
 # Use this to rehearse a country end-to-end on a handful of clusters
@@ -10,6 +10,7 @@
 # Usage (from repo root, in Git Bash):
 #     PYTHON=/c/Users/<you>/anaconda3/envs/mgpy_planning/python.exe \
 #     HORIZON=3 ./hpc/run_local.sh test_sample.csv
+#   (without an argument it uses $SAMPLE_CSV)
 #
 # Env vars (all optional):
 #   PYTHON             python to use (default: python on PATH)
@@ -17,18 +18,18 @@
 #   HORIZON            years (default 20; use 2-3 for a quick smoke test)
 #   FEASIBILITY_FLAGS  "" (thesis PV+battery) | "--include-generator" | "--max-lost-load 0.05 --lost-load-cost 5.0"
 # =====================================================================
-set -uo pipefail
+set -uo pipefail   # no -e on purpose: one failed cluster must not stop the loop
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-CSV="${1:-advanced_sample.csv}"
+CSV="${1:-${SAMPLE_CSV:?give a sample CSV as argument or set SAMPLE_CSV}}"
 PYTHON="${PYTHON:-python}"
 SOLVER="${SOLVER:-highs}"
 HORIZON="${HORIZON:-20}"
 FEASIBILITY_FLAGS="${FEASIBILITY_FLAGS:-}"
 
-[ -f "$CSV" ] || { echo "ERROR: CSV not found: $CSV"; exit 1; }
-N=$(grep -v '^//' "$CSV" | tail -n +2 | grep -c .)
+# Same row count / task mapping as the HPC runs (mgpy2/sample.py)
+N=$("$PYTHON" -m mgpy2.sample "$CSV") || { echo "ERROR: cannot read sample $CSV"; exit 1; }
 [ "$N" -ge 1 ] || { echo "ERROR: no data rows in $CSV"; exit 1; }
 
 echo "=========================================="

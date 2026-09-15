@@ -35,14 +35,17 @@ Environment: a conda env that imports **both** engines (verified: `mgpy_planning
 py3.11, with linopy + highspy). HiGHS is the default solver (no license needed).
 
 ```bash
+# which country sample to use (all tools read it)
+export SAMPLE_CSV=data/sample_input_2025/ETH/advanced_sample.csv
+
 # one cluster
 python -m mgpy2.run_cluster --cat GHSL_1 --solver highs
 
 # whole sample, locally, 3 workers
-python orchestrator.py --csv advanced_sample.csv --workers 3 --horizon 20
+python orchestrator.py --workers 3 --horizon 20
 
 # aggregate results
-python -m mgpy2.postprocess --sample advanced_sample.csv
+python -m mgpy2.postprocess
 ```
 
 HPC (submit from repo root): `./hpc/submit_jobs.sh`, monitor with `./hpc/monitor_jobs.sh`.

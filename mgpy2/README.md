@@ -7,7 +7,7 @@ as a preprocessing library.
 
 ## Pipeline (per cluster)
 ```
-advanced_sample.csv row
+sample row ($SAMPLE_CSV; task N = row N via mgpy2.sample)
    -> config_map.build_project        # formulation.json + split YAMLs (write_templates + patched values)
    -> input_prep.write_demand_and_resource
         demand:   microgridspy.utils.archetypes.demand_calculation  (+ School_weights)  -> load_demand.csv (kWh)
@@ -30,9 +30,10 @@ linopy + highspy). HiGHS is the default solver (no license).
 ## Run
 Local (parallel):
 ```bash
-python orchestrator.py --csv advanced_sample.csv --workers 3 --solver highs --horizon 20
+export SAMPLE_CSV=data/sample_input_2025/ETH/advanced_sample.csv
+python orchestrator.py --workers 3 --solver highs --horizon 20
 ```
-One cluster (SGE-style):
+One cluster (SGE-style; needs `SAMPLE_CSV` as above, or `--csv PATH`):
 ```bash
 python -m mgpy2.run_cluster --task-id 1 --solver highs
 python -m mgpy2.run_cluster --cat GHSL_1 --solver highs

@@ -20,6 +20,7 @@ from typing import Dict, Optional
 import pandas as pd
 
 from mgpy2.paths import projects_root
+from mgpy2.sample import load_sample, sample_path
 
 
 def _results_dir(cat: str, projects: Path) -> Path:
@@ -133,8 +134,7 @@ def demand_year1_kwh(cat: str, projects: Path) -> Optional[float]:
 def aggregate(sample_csv: Path, projects: Optional[Path] = None,
               out_csv: Optional[Path] = None, gpkg: Optional[Path] = None) -> pd.DataFrame:
     projects = projects or projects_root()
-    df = pd.read_csv(sample_csv)
-    df = df[~df.iloc[:, 0].astype(str).str.startswith("//")].reset_index(drop=True)
+    df = load_sample(Path(sample_csv))   # same rows/order as the runs (mgpy2.sample)
 
     for idx, row in df.iterrows():
         cat = row["cat"]
@@ -177,12 +177,12 @@ def aggregate(sample_csv: Path, projects: Optional[Path] = None,
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sample", default=str((projects_root().parent / "advanced_sample.csv")))
+    ap.add_argument("--sample", default=None, help="sample file (default: $SAMPLE_CSV)")
     ap.add_argument("--projects", default=str(projects_root()))
     ap.add_argument("--out", default=None, help="output CSV (default: <sample>_results.csv)")
     ap.add_argument("--gpkg", default=None)
     args = ap.parse_args()
-    sample = Path(args.sample)
+    sample = sample_path(args.sample)
     out = Path(args.out) if args.out else sample.with_name(sample.stem + "_results.csv")
     df = aggregate(sample, Path(args.projects), out_csv=out,
                    gpkg=Path(args.gpkg) if args.gpkg else None)

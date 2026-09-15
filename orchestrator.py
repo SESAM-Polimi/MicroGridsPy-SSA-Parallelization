@@ -1,29 +1,25 @@
 #!/usr/bin/env python3
 """
-orchestrator_new.py — LOCAL parallel runner on the NEW MicroGridsPy engine.
+orchestrator.py — LOCAL parallel runner on the NEW MicroGridsPy engine.
 
-Drop-in replacement for orchestrator.py. Reads advanced_sample.csv and runs each
+Reads the country sample ($SAMPLE_CSV or --csv, via mgpy2.sample) and runs each
 cluster via mgpy2.run_cluster in a ProcessPool. Each worker chdir's to the repo
 root (handled inside run_cluster) so `projects/<cat>` resolves consistently.
 
 Usage:
-    python orchestrator_new.py --csv advanced_sample.csv --workers 3 --solver highs
+    python orchestrator.py --csv data/sample_input_2025/ETH/advanced_sample.csv --workers 3
 
-Completion marker is results/reporting_summary.csv (skipped if present).
+Completion marker is results/summary.json.
 """
 from __future__ import annotations
 
 import argparse
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pathlib import Path
-
-import pandas as pd
 
 from mgpy2.config_map import ThesisConfig
 from mgpy2.run_cluster import run_cluster
-
-REPO = Path(__file__).resolve().parent
+from mgpy2.sample import load_sample, sample_path
 
 
 def _worker(row: dict, cfg: ThesisConfig, solver: str, prepare: bool, solve: bool):
@@ -33,7 +29,7 @@ def _worker(row: dict, cfg: ThesisConfig, solver: str, prepare: bool, solve: boo
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default=str(REPO / "advanced_sample.csv"))
+    ap.add_argument("--csv", default=None, help="sample file (default: $SAMPLE_CSV)")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--solver", default="highs")
     ap.add_argument("--horizon", type=int, default=20)
@@ -62,9 +58,7 @@ def main() -> None:
         dispatch_format=args.dispatch_format,
     )
 
-    df = pd.read_csv(args.csv)
-    df = df[~df.iloc[:, 0].astype(str).str.startswith("//")].reset_index(drop=True)
-    rows = df.to_dict("records")
+    rows = load_sample(sample_path(args.csv)).to_dict("records")
 
     print(f"Running {len(rows)} clusters on {args.workers} workers (solver={args.solver}, "
           f"horizon={args.horizon}, generator={args.include_generator}, "

@@ -166,7 +166,7 @@ def _write_error(results_dir: Path, msg: str) -> None:
 # CLI: run a single row from advanced_sample.csv by 1-based task id (SGE-friendly)
 if __name__ == "__main__":
     import argparse
-    from mgpy2.sample import load_sample, row_for_task, sample_path    
+    from mgpy2.sample import load_sample, row_for_task, sample_path
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default=None, help="sample file (default: $SAMPLE_CSV)")
     ap.add_argument("--task-id", type=int, help="1-based row index (excludes // comment rows)")
@@ -202,7 +202,7 @@ if __name__ == "__main__":
     if args.cat:
         sub = df[df["cat"].astype(str) == args.cat]
         if sub.empty:
-            raise SystemExit(f"cat {args.cat} not found in {csv_path}")        
+            raise SystemExit(f"cat {args.cat} not found in {csv_path}")
         row = sub.iloc[0].to_dict()
     else:
         if args.task_id is None:

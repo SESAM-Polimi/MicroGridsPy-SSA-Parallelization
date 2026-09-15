@@ -8,14 +8,14 @@ the `mgpy2` pipeline (new MicroGridsPy engine). One SGE array task = one cluster
 ## 0. One-time setup on the HPC
 
 ```bash
-# 1. copy the repo to the cluster (rsync; skip the big demo projects if you like)
-rsync -av --exclude 'engines/new/projects' ./MicroGridsPy-SSA-Parallelization-main/ \
-      user@hpc:~/mgpy_ssa/
+# 1. get the code with git (the cluster can reach GitHub); work in scratch
+cd /global-scratch/flash_pool/$USER
+git clone -b development https://github.com/SESAM-Polimi/MicroGridsPy-SSA-Parallelization.git
+cd MicroGridsPy-SSA-Parallelization
+# later updates:  git pull
 
-# 2. create the conda env that imports BOTH engines
-cd ~/mgpy_ssa
-conda env create -f engines/new/environment.yml -n mgpy_planning   # or mamba
-conda activate mgpy_planning
+# 2. conda env that imports BOTH engines (see hpc/requirements-cluster.txt)
+conda activate mgpy_clean
 
 # 3. sanity check: both engines + the pipeline import
 python -c "import sys; sys.path[:0]=['engines/new','engines/old']; \
@@ -24,18 +24,22 @@ import core.multi_year_model.model, microgridspy.utils.archetypes, mgpy2.run_clu
 
 ## 1. Edit the ONE config file: `hpc/env.sh`
 
-The only path you MUST change is your conda base. Everything else is optional.
+All settings live there; each one can also be overridden for a single command,
+e.g. `SAMPLE_CSV=... ./hpc/submit_jobs.sh`. The main ones:
 
 ```bash
-CONDA_BASE="$HOME/miniconda3"     # <-- your conda install (NOT the old teammate path)
-CONDA_ENV="mgpy_planning"
-SGE_QUEUE="energia.q"             # your queue
-SGE_NODES="node-1-3|node-1-6|node-1-7|node-1-8"   # or "" for no node restriction
-H_VMEM="8G"                       # 20-yr hourly model needs headroom (raise if OOM)
+CONDA_BASE="$HOME/miniconda3"     # conda install
+CONDA_ENV="mgpy_clean"
+SAMPLE_CSV="data/sample_input_2025/ETH/advanced_sample.csv"   # WHICH COUNTRY (see §4)
+SGE_QUEUE="energia.q"
+SGE_NODES="node-1-3"              # only nodes you are allowed to use
+H_VMEM="8G"
 H_RT="06:00:00"
-MAX_CONCURRENT="64"
+MAX_CONCURRENT="16"
+SOLVER="gurobi"                   # passed explicitly to every task
 FEASIBILITY_FLAGS=""              # empty = thesis PV+battery design (see §2)
 RUN_MODE="full"                   # "full" (nodes have internet) or "solve-only" (see §3)
+EXPORT_PROFILE="core"             # lean per-cluster output (summary.json + dispatch)
 ```
 
 ## 2. System options (optional)
@@ -62,17 +66,19 @@ Each cluster downloads solar data from PVGIS over the internet.
 
 ```bash
 # on the LOGIN node (has internet) — parallel PVGIS/demand prefetch for the whole country
-python orchestrator.py --csv advanced_sample.csv --prepare-only --workers 8
+python orchestrator.py --csv "$SAMPLE_CSV" --prepare-only --workers 8
 # then set RUN_MODE="solve-only" in hpc/env.sh and submit (§5)
 ```
 
-## 4. Stage the country sample
+## 4. Choose the country sample
 
-The pipeline reads `advanced_sample.csv` from the repo root. Ready-made per-country
-samples already exist under `data/thesis_results_2026/`:
+Every script reads the sample given by **`SAMPLE_CSV`** (set in `hpc/env.sh`, or
+`--csv` / `--sample` on the Python tools). Do NOT copy files to the repo root: that
+old convention is gone. Task *N* always means row *N* of the sample as read by
+`mgpy2/sample.py` (`//` comment rows skipped); every script uses that one mapping.
 
 ```bash
-cp data/thesis_results_2026/GHA_sample.csv advanced_sample.csv   # e.g. Ghana
+python -m mgpy2.sample "$SAMPLE_CSV"      # prints the number of tasks
 ```
 (Only regenerate from raw GIS with `sample_generation/` if you must — those scripts
 still contain hardcoded `/Users/matteo/...` paths and need editing first.)
@@ -80,7 +86,7 @@ still contain hardcoded `/Users/matteo/...` paths and need editing first.)
 ## 5. Submit the whole country
 
 ```bash
-./hpc/submit_jobs.sh        # counts rows, prints the plan, submits the array
+./hpc/submit_jobs.sh        # counts rows, prints the plan (check "Sample:"!), submits the array
 ```
 
 ## 6. Monitor, recover, aggregate
@@ -88,21 +94,21 @@ still contain hardcoded `/Users/matteo/...` paths and need editing first.)
 ```bash
 ./hpc/monitor_jobs.sh                       # progress + queue + clusters with error.txt
 
-# rerun only failed/incomplete clusters (marker = results/reporting_summary.csv)
+# rerun only failed/incomplete clusters (marker = results/summary.json)
+source hpc/env.sh && activate_env
 python hpc/make_failed_task_list.py
-source hpc/env.sh
 M=$(wc -l < tasks_failed.txt)
-qsub -q "$SGE_QUEUE" -l h_vmem=$H_VMEM -l h_rt=$H_RT \
-     $( [ -n "$SGE_NODES" ] && echo -l hostname=$SGE_NODES ) \
-     -t 1-$M -tc $MAX_CONCURRENT hpc/submit_rerun_array.sh
+qsub -q "$SGE_QUEUE" -l h_vmem="$H_VMEM" -l h_rt="$H_RT" \
+     -l hostname="$SGE_NODES" -v SAMPLE_CSV="$SAMPLE_CSV" \
+     -t 1-"$M" -tc "$MAX_CONCURRENT" hpc/submit_rerun_array.sh
 
 # aggregate all results into an enriched CSV (+ optional map)
-python -m mgpy2.postprocess --sample advanced_sample.csv \
-       --out results_GHA.csv --gpkg results_GHA.gpkg
+python -m mgpy2.postprocess --out results_ETH.csv --gpkg results_ETH.gpkg
 ```
 
-Per-cluster outputs land in `projects/<cat>/results/` (LCOE in `reporting_summary.csv`,
-sizing in `capacity_by_year.csv` / `design_by_step.csv`); logs in `logs/`.
+Per-cluster outputs land in `projects/<cat>/results/` (`summary.json`: LCOE, NPC,
+investment, sizing; `dispatch.parquet`); the full result set is rebuilt offline with
+`python -m mgpy2.reporting`. Logs in `logs/`.
 
 ---
 
@@ -111,7 +117,7 @@ sizing in `capacity_by_year.csv` / `design_by_step.csv`); logs in `logs/`.
 | Location | Path | Action |
 |---|---|---|
 | `mgpy2/` | none | ✅ all via `paths.py` (+ `MGPY2_*` env overrides) |
-| `hpc/env.sh` | `CONDA_BASE`, queue, nodes | **edit once** for your account/site |
+| `hpc/env.sh` | `CONDA_BASE`, queue, nodes, `SAMPLE_CSV` | **edit once** for your account/site/country |
 | `sample_generation/*.py` | `/Users/matteo/...` | only if regenerating samples; otherwise ignore |
 
 ## What was improved vs the original .sh
@@ -126,4 +132,7 @@ sizing in `capacity_by_year.csv` / `design_by_step.csv`); logs in `logs/`.
    the thesis charge/discharge times (5 h → 0.2, 4 h → 0.25), so PV+battery works with
    no generator or lost-load needed.
 4. **prepare/solve split** for offline compute nodes (PVGIS prefetch on the login node).
-5. Added `set -uo pipefail`, cwd-independent repo resolution, and clearer logging.
+5. Added `set -euo pipefail`, clearer logging, and repo resolution via `$SGE_O_WORKDIR`
+   in the array scripts (`$0` points to SGE's spool copy there).
+6. **One sample setting, one task mapping:** `SAMPLE_CSV` + `mgpy2/sample.py`, used by
+   every script (previously four separate row-counting implementations).
