@@ -38,6 +38,25 @@ class RunResult:
     message: str = ""
 
 
+def solver_params_for(solver: str, threads: Optional[int] = None,
+                      time_limit: Optional[float] = None) -> dict:
+    """Translate generic limits into the option names each solver expects.
+
+    Gurobi: Threads / TimeLimit.  HiGHS: threads / time_limit.
+    Only limits that were actually given are returned (None = solver default).
+    """
+    names = {"gurobi": ("Threads", "TimeLimit"), "highs": ("threads", "time_limit")}
+    if solver not in names:
+        raise ValueError(f"no solver-parameter mapping for solver {solver!r}")
+    threads_key, time_key = names[solver]
+    params: dict = {}
+    if threads is not None:
+        params[threads_key] = int(threads)
+    if time_limit is not None:
+        params[time_key] = float(time_limit)
+    return params
+
+
 def _project_name_from_row(row: dict) -> str:
     ensure_engines_importable()
     from core.io.utils import sanitize_project_name
@@ -173,6 +192,10 @@ if __name__ == "__main__":
     ap.add_argument("--cat", help="run a specific cluster id instead of --task-id")
     ap.add_argument("--solver", default="highs")
     ap.add_argument("--horizon", type=int, default=20)
+    ap.add_argument("--threads", type=int, default=None,
+                    help="solver threads (use 1 per SGE slot)")
+    ap.add_argument("--time-limit", type=float, default=None,
+                    help="solver time limit in seconds (keep below h_rt)")
     ap.add_argument("--include-generator", action="store_true",
                     help="add a diesel backup (feasibility option)")
     ap.add_argument("--max-lost-load", type=float, default=0.0,
@@ -210,6 +233,7 @@ if __name__ == "__main__":
         row = row_for_task(df, args.task_id)
 
     res = run_cluster(row, cfg=cfg, solver=args.solver,
+                      solver_params=solver_params_for(args.solver, args.threads, args.time_limit),
                       prepare=not args.solve_only, solve=not args.prepare_only)
     print(f"[{res.cat}] {res.status} obj={res.objective} lcoe={res.lcoe} {res.message}")
     raise SystemExit(0 if res.status in ("ok", "skip", "prepared") else 1)

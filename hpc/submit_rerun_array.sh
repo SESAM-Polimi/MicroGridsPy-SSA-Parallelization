@@ -3,6 +3,7 @@
 #$ -N mgpy_rerun
 #$ -cwd
 #$ -j y
+#$ -o /dev/null   # all output goes to logs/ (see exec below)
 # =====================================================================
 # SGE array task for RERUNS.
 # Array index i -> line i of tasks_failed.txt, which holds a real task id
@@ -21,12 +22,13 @@ set -euo pipefail
 : "${SGE_O_WORKDIR:?ERROR: SGE_O_WORKDIR is not defined}"
 REPO_ROOT="$SGE_O_WORKDIR"     # NOT $0: under SGE, $0 is a copy in the spool dir
 cd "$REPO_ROOT"
+source hpc/env.sh
+check_disk_or_hold "$REPO_ROOT"
 
 mkdir -p logs
 PADDED=$(printf "%05d" "$SGE_TASK_ID")
-exec >"logs/${JOB_NAME}.${PADDED}.log" 2>&1
+exec >"logs/${JOB_NAME}.${JOB_ID}.${PADDED}.log" 2>&1
 
-source hpc/env.sh
 activate_env
 
 [ -f tasks_failed.txt ] || { echo "tasks_failed.txt not found. Run: python hpc/make_failed_task_list.py"; exit 1; }
@@ -40,6 +42,8 @@ python -m mgpy2.run_cluster \
     --task-id "$ACTUAL_TASK_ID" \
     --csv "$SAMPLE_CSV" \
     --solver "$SOLVER" \
+    --threads "$SOLVER_THREADS" \
+    --time-limit "$SOLVER_TIME_LIMIT" \
     --horizon "$HORIZON" \
     $FEASIBILITY_FLAGS \
     $(mode_flag)
