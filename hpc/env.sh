@@ -7,7 +7,7 @@
 # =====================================================================
 
 # --- your conda install + env (the ONLY hardcoded path you must set) ---
-CONDA_BASE="${CONDA_BASE:-home/energia/nstevanato/miniconda3}"     # <-- CHANGE to your conda base
+CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"     # conda base; $HOME works on every node
 CONDA_ENV="${CONDA_ENV:-mgpy_clean}"          # env that imports BOTH engines
 
 # --- SGE resources (applied via qsub CLI, so they are never ignored) ---
