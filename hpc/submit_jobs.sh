@@ -8,20 +8,26 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 source hpc/env.sh
+activate_env   # python + pandas are needed to count the rows
 
-CSV_FILE="data/sample_input_2025/ETH/advanced_sample.csv"
-[ -f "$CSV_FILE" ] || { echo "ERROR: $CSV_FILE not found in $REPO_ROOT"; exit 1; }
-
-NUM_ROWS=$(grep -v '^//' "$CSV_FILE" | tail -n +2 | wc -l | tr -d ' ')
-[ "$NUM_ROWS" -ge 1 ] || { echo "ERROR: no valid rows in $CSV_FILE"; exit 1; }
+# Row count comes from the SAME code that maps task id -> row (mgpy2/sample.py),
+# so the array size can never disagree with what each task reads.
+NUM_ROWS=$(python -m mgpy2.sample "$SAMPLE_CSV") \
+  || { echo "ERROR: cannot read sample $SAMPLE_CSV"; exit 1; }
+[ "$NUM_ROWS" -ge 1 ] || { echo "ERROR: no valid rows in $SAMPLE_CSV"; exit 1; }
 
 # Build SGE resource args from env.sh (applied on the CLI => always honoured).
 RES=(-q "$SGE_QUEUE" -l "h_vmem=$H_VMEM" -l "h_rt=$H_RT")
 [ -n "$SGE_NODES" ] && RES+=(-l "hostname=$SGE_NODES")
 
+# Pass the sample path to every task: each task starts a fresh shell on the
+# compute node, so without -v a value set here would be lost there.
+RES+=(-v "SAMPLE_CSV=$SAMPLE_CSV")
+
 echo "=========================================="
 echo "MicroGridsPy country run (NEW engine)"
 echo "Clusters:    $NUM_ROWS   (array 1-$NUM_ROWS, max $MAX_CONCURRENT concurrent)"
+echo "Sample:      $SAMPLE_CSV"
 echo "Solver:      $SOLVER | horizon $HORIZON | mode $RUN_MODE"
 echo "Feasibility: $FEASIBILITY_FLAGS"
 echo "Resources:   ${RES[*]}"
