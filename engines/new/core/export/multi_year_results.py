@@ -318,7 +318,8 @@ def build_dispatch_timeseries_table_multi_year(
     p = get_params(data)
     load = require_data_array("load_demand", p.load_demand)
     res = require_data_array("res_generation", get_var_solution(vars_dict=vars, solution=solution, name="res_generation"))
-    gen = _sum_if_has_inv_step(require_data_array("generator_generation", get_var_solution(vars_dict=vars, solution=solution, name="generator_generation")))
+    gen_var = get_var_solution(vars_dict=vars, solution=solution, name="generator_generation")
+    gen = _sum_if_has_inv_step(gen_var) if isinstance(gen_var, xr.DataArray) else None
     bch = _sum_if_has_inv_step(require_data_array("battery_charge", get_var_solution(vars_dict=vars, solution=solution, name="battery_charge")))
     bdis = _sum_if_has_inv_step(require_data_array("battery_discharge", get_var_solution(vars_dict=vars, solution=solution, name="battery_discharge")))
     bsoc = _sum_if_has_inv_step(require_data_array("battery_soc", get_var_solution(vars_dict=vars, solution=solution, name="battery_soc")))
@@ -376,7 +377,7 @@ def build_dispatch_timeseries_table_multi_year(
     df["res_generation_total"] = res.sum("resource").to_series().values.astype(float)
     for resource in res.coords["resource"].values.tolist():
         df[f"res_generation__{resource}"] = res.sel(resource=resource).to_series().values.astype(float)
-    df["generator_generation"] = gen.to_series().values.astype(float)
+    df["generator_generation"] = gen.to_series().values.astype(float) if isinstance(gen, xr.DataArray) else 0.0
     df["battery_charge"] = bch.to_series().values.astype(float)
     df["battery_discharge"] = bdis.to_series().values.astype(float)
     df["battery_soc"] = bsoc.to_series().values.astype(float)
@@ -930,7 +931,7 @@ def build_discounted_cashflows_table_multi_year(
     bat_inv_power = require_data_array("battery_inverter_power", get_var_solution(vars_dict=vars, solution=solution, name="battery_inverter_power"))
     gen_units = require_data_array("generator_units", get_var_solution(vars_dict=vars, solution=solution, name="generator_units"))
     res_gen = require_data_array("res_generation", get_var_solution(vars_dict=vars, solution=solution, name="res_generation"))
-    fuel_cons = require_data_array("fuel_consumption", get_var_solution(vars_dict=vars, solution=solution, name="fuel_consumption"))
+    fuel_cons = get_var_solution(vars_dict=vars, solution=solution, name="fuel_consumption")  # None when no generator
     lost_load = require_data_array("lost_load", get_var_solution(vars_dict=vars, solution=solution, name="lost_load"))
     gimp = get_var_solution(vars_dict=vars, solution=solution, name="grid_import")
     gexp = get_var_solution(vars_dict=vars, solution=solution, name="grid_export")
@@ -973,9 +974,12 @@ def build_discounted_cashflows_table_multi_year(
     ann_bat_inv_y = (ann_bat_inverter * act_bat).sum("inv_step")
     ann_gen_y = (ann_gen * act_gen).sum("inv_step")
 
-    fuel_price = p.fuel_cost_per_unit_fuel if p.fuel_cost_per_unit_fuel is not None else p.fuel_fuel_cost_per_unit_fuel
-    fuel_price = require_data_array("fuel_cost_per_unit_fuel", fuel_price)
-    opex_y_s = (fuel_cons * fuel_price).sum("period").sum("inv_step")
+    if isinstance(fuel_cons, xr.DataArray):
+        fuel_price = p.fuel_cost_per_unit_fuel if p.fuel_cost_per_unit_fuel is not None else p.fuel_fuel_cost_per_unit_fuel
+        fuel_price = require_data_array("fuel_cost_per_unit_fuel", fuel_price)
+        opex_y_s = (fuel_cons * fuel_price).sum("period").sum("inv_step")
+    else:
+        opex_y_s = _as_year_scenario_da(0.0, sets)
     if p.is_grid_on() and isinstance(gimp, xr.DataArray) and p.grid_import_price is not None:
         opex_y_s = opex_y_s + (gimp * p.grid_import_price).sum("period")
     if p.is_grid_export_enabled() and isinstance(gexp, xr.DataArray) and p.grid_export_price is not None:
@@ -1001,7 +1005,7 @@ def build_discounted_cashflows_table_multi_year(
         opex_y_s = opex_y_s + fixed_om_bat_inv_y_s
     if p.lost_load_cost_per_kwh is not None:
         ext_y_s = ext_y_s + lost_load.sum("period") * p.lost_load_cost_per_kwh
-    if p.fuel_direct_emissions_kgco2e_per_unit_fuel is not None and p.emission_cost_per_kgco2e is not None:
+    if isinstance(fuel_cons, xr.DataArray) and p.fuel_direct_emissions_kgco2e_per_unit_fuel is not None and p.emission_cost_per_kgco2e is not None:
         ext_y_s = ext_y_s + (fuel_cons.sum("period") * p.fuel_direct_emissions_kgco2e_per_unit_fuel).sum("inv_step") * p.emission_cost_per_kgco2e
 
     commission_res = replacement_commission_mask(sets, res_life)
@@ -1074,7 +1078,7 @@ def build_scenario_costs_table_multi_year(
     bat_inv_power = require_data_array("battery_inverter_power", get_var_solution(vars_dict=vars, solution=solution, name="battery_inverter_power"))
     gen_units = require_data_array("generator_units", get_var_solution(vars_dict=vars, solution=solution, name="generator_units"))
     res_gen = require_data_array("res_generation", get_var_solution(vars_dict=vars, solution=solution, name="res_generation"))
-    fuel_cons = require_data_array("fuel_consumption", get_var_solution(vars_dict=vars, solution=solution, name="fuel_consumption"))
+    fuel_cons = get_var_solution(vars_dict=vars, solution=solution, name="fuel_consumption")  # None when no generator
     lost_load = require_data_array("lost_load", get_var_solution(vars_dict=vars, solution=solution, name="lost_load"))
 
     grid_imp = get_var_solution(vars_dict=vars, solution=solution, name="grid_import")
@@ -1092,7 +1096,7 @@ def build_scenario_costs_table_multi_year(
     gen_capex = require_data_array("generator_specific_investment_cost_per_kw", p.generator_specific_investment_cost_per_kw)
 
     fuel_price = p.fuel_cost_per_unit_fuel if p.fuel_cost_per_unit_fuel is not None else p.fuel_fuel_cost_per_unit_fuel
-    fuel_cost_y_s = _as_year_scenario_da((fuel_cons * fuel_price).sum("period").sum("inv_step"), sets) if fuel_price is not None else _as_year_scenario_da(0.0, sets)
+    fuel_cost_y_s = _as_year_scenario_da((fuel_cons * fuel_price).sum("period").sum("inv_step"), sets) if (isinstance(fuel_cons, xr.DataArray) and fuel_price is not None) else _as_year_scenario_da(0.0, sets)
     grid_import_cost_y_s = _as_year_scenario_da((grid_imp * p.grid_import_price).sum("period"), sets) if (p.is_grid_on() and isinstance(grid_imp, xr.DataArray) and p.grid_import_price is not None) else _as_year_scenario_da(0.0, sets)
     grid_export_rev_y_s = _as_year_scenario_da((grid_exp * p.grid_export_price).sum("period"), sets) if (p.is_grid_export_enabled() and isinstance(grid_exp, xr.DataArray) and p.grid_export_price is not None) else _as_year_scenario_da(0.0, sets)
 
@@ -1122,7 +1126,7 @@ def build_scenario_costs_table_multi_year(
 
     lost_load_cost_y_s = _as_year_scenario_da(lost_load.sum("period") * p.lost_load_cost_per_kwh, sets) if p.lost_load_cost_per_kwh is not None else _as_year_scenario_da(0.0, sets)
 
-    scope1_y_s = _as_year_scenario_da((fuel_cons.sum("period") * p.fuel_direct_emissions_kgco2e_per_unit_fuel).sum("inv_step"), sets) if p.fuel_direct_emissions_kgco2e_per_unit_fuel is not None else _as_year_scenario_da(0.0, sets)
+    scope1_y_s = _as_year_scenario_da((fuel_cons.sum("period") * p.fuel_direct_emissions_kgco2e_per_unit_fuel).sum("inv_step"), sets) if (isinstance(fuel_cons, xr.DataArray) and p.fuel_direct_emissions_kgco2e_per_unit_fuel is not None) else _as_year_scenario_da(0.0, sets)
     scope2_y_s = _as_year_scenario_da(0.0, sets)
     if p.is_grid_on() and isinstance(grid_imp, xr.DataArray) and p.grid_transmission_efficiency is not None and p.grid_emissions_factor_kgco2e_per_kwh is not None:
         scope2_y_s = _as_year_scenario_da((grid_imp * p.grid_transmission_efficiency).sum("period") * p.grid_emissions_factor_kgco2e_per_kwh, sets)
@@ -1654,7 +1658,26 @@ def export_multi_year_results(
     vars: Dict[str, Any],
     solution: Optional[xr.Dataset],
     out_dir: Path | None = None,
+    *,
+    profile: str = "full",
+    dispatch_format: str = "parquet",
 ) -> dict:
+    """Export multi-year results.
+
+    profile="full" (default) writes the complete bundle (all CSVs + Excel) and is
+    unchanged. profile="core" writes only the lean cluster bundle
+    (summary.json + dispatch.<dispatch_format>) via core.export.multi_year_core;
+    everything omitted is reconstructible offline from that bundle + the inputs.
+    """
+    if str(profile).lower() == "core":
+        # Lazy import keeps multi_year_core -> multi_year_results the only module-load
+        # edge (no import cycle), and keeps the heavy builders off the lean path.
+        from core.export.multi_year_core import export_core_outputs
+        return export_core_outputs(
+            project_name, sets, data, model, vars, solution,
+            out_dir=out_dir, dispatch_format=dispatch_format,
+        )
+
     if out_dir is None:
         out_dir = ensure_results_dir(project_name)
     else:
