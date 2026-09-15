@@ -13,10 +13,15 @@ advanced_sample.csv row
         demand:   microgridspy.utils.archetypes.demand_calculation  (+ School_weights)  -> load_demand.csv (kWh)
         solar:    microgridspy.utils.pvgis.download_pvgis_pv_data    -> resource_availability.csv (capacity factor)
    -> run_cluster: MultiYearModel(project).solve_single_objective(highs)
-   -> core.export.multi_year_results.export_multi_year_results       -> projects/<cat>/results/*
+   -> export (profile="core", default): summary.json + dispatch.<parquet|csv>
+      (profile="full" writes the legacy CSV+Excel bundle)          -> projects/<cat>/results/
 postprocess.aggregate  -> enriched sample CSV (+ optional .gpkg map)
 ```
-Completion marker: `projects/<cat>/results/reporting_summary.csv` (LCOE lives here).
+Completion marker: `projects/<cat>/results/summary.json` (holds meta + metrics
+[NPC, LCOE, investment] + sizing). The full per-year/-scenario result set
+(energy_balance, kpis, cashflows, inverter metrics, reporting_summary, ...) is
+rebuilt OFFLINE from `summary.json` + `dispatch` + inputs via `mgpy2.reporting`
+(`python -m mgpy2.reporting --cat <id> [--out DIR]`).
 
 ## Environment
 Use a conda env that imports BOTH engines (verified: `mgpy_planning`, py3.11, with
