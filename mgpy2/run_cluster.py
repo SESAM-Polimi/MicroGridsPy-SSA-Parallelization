@@ -152,9 +152,9 @@ def _write_error(results_dir: Path, msg: str) -> None:
 # CLI: run a single row from advanced_sample.csv by 1-based task id (SGE-friendly)
 if __name__ == "__main__":
     import argparse
-    import pandas as pd
+    from mgpy2.sample import load_sample, row_for_task, sample_path    
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default=str(repo_root() / "advanced_sample.csv"))
+    ap.add_argument("--csv", default=None, help="sample file (default: $SAMPLE_CSV)")
     ap.add_argument("--task-id", type=int, help="1-based row index (excludes // comment rows)")
     ap.add_argument("--cat", help="run a specific cluster id instead of --task-id")
     ap.add_argument("--solver", default="highs")
@@ -177,17 +177,17 @@ if __name__ == "__main__":
         lost_load_cost_per_kwh=args.lost_load_cost,
     )
 
-    df = pd.read_csv(args.csv)
-    df = df[~df.iloc[:, 0].astype(str).str.startswith("//")].reset_index(drop=True)
+    csv_path = sample_path(args.csv)
+    df = load_sample(csv_path)
     if args.cat:
         sub = df[df["cat"].astype(str) == args.cat]
         if sub.empty:
-            raise SystemExit(f"cat {args.cat} not found in {args.csv}")
+            raise SystemExit(f"cat {args.cat} not found in {csv_path}")        
         row = sub.iloc[0].to_dict()
     else:
-        if not args.task_id or args.task_id < 1 or args.task_id > len(df):
-            raise SystemExit(f"--task-id out of range 1..{len(df)}")
-        row = df.iloc[args.task_id - 1].to_dict()
+        if args.task_id is None:
+            raise SystemExit("give --task-id or --cat")
+        row = row_for_task(df, args.task_id)
 
     res = run_cluster(row, cfg=cfg, solver=args.solver,
                       prepare=not args.solve_only, solve=not args.prepare_only)
