@@ -1,18 +1,19 @@
 """
 postprocess.py — aggregate NEW-engine per-cluster results back into the sample table.
 
-Replaces the old postprocess.py which read costs.csv / sizing_results.csv. The new
-engine writes a results bundle per cluster; this module reads:
+The cluster now writes the lean core bundle per cluster; this module reads (in order):
 
-  reporting_summary.csv  -> LCOE, Net Present Cost, investment cost (present/nominal)
-  capacity_by_year.csv   -> total installed PV (kW) and Battery (kWh) [last year]
-  design_by_step.csv      -> fallback sizing (sum of steps)
+  summary.json           -> LCOE, NPC, investment (present/nominal) + sizing (last year):
+                            PV (kW), Battery (kWh), Battery inverter (kW), Generator (kW)
+  reporting_summary.csv  -> legacy full-profile fallback (LCOE, NPC, investment)
+  capacity_by_year.csv / design_by_step.csv -> legacy full-profile sizing fallback
 
 Outputs an enriched copy of the sample CSV and (if geopandas is available) a
 GeoPackage point map, mirroring the old behaviour.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -23,6 +24,43 @@ from mgpy2.paths import projects_root
 
 def _results_dir(cat: str, projects: Path) -> Path:
     return projects / str(cat) / "results"
+
+
+def read_summary(results_dir: Path) -> Optional[Dict[str, Optional[float]]]:
+    """Read the lean summary.json (core export profile). Returns metrics + last-year
+    sizing, or None if the file is absent (caller then falls back to legacy CSVs)."""
+    f = results_dir / "summary.json"
+    if not f.exists():
+        return None
+    try:
+        d = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    metrics = d.get("metrics") or {}
+    cap = d.get("capacity_by_year") or []
+    last: Dict = {}
+    if cap:
+        try:
+            last = sorted(cap, key=lambda r: str(r.get("year")))[-1]
+        except Exception:
+            last = cap[-1]
+
+    def _num(x) -> Optional[float]:
+        try:
+            return float(x) if x is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "lcoe": _num(metrics.get("lcoe_per_kwh")),
+        "npc": _num(metrics.get("objective_npc")),
+        "investment_present": _num(metrics.get("investment_present")),
+        "investment_nominal": _num(metrics.get("investment_nominal")),
+        "pv_kw": _num(last.get("renewables_kw")),
+        "battery_kwh": _num(last.get("battery_kwh")),
+        "battery_inverter_kw": _num(last.get("battery_inverter_kw")),
+        "generator_kw": _num(last.get("generator_kw")),
+    }
 
 
 def read_reporting_summary(results_dir: Path) -> Dict[str, Optional[float]]:
@@ -101,10 +139,18 @@ def aggregate(sample_csv: Path, projects: Optional[Path] = None,
     for idx, row in df.iterrows():
         cat = row["cat"]
         rd = _results_dir(cat, projects)
-        rep = read_reporting_summary(rd)
-        siz = read_sizing(rd)
+        summary = read_summary(rd)
+        if summary is not None:  # core export profile
+            rep = summary
+            siz = summary
+            battery_inverter_kw = summary["battery_inverter_kw"]
+        else:                    # legacy full-profile fallback
+            rep = read_reporting_summary(rd)
+            siz = read_sizing(rd)
+            battery_inverter_kw = None
         df.at[idx, "pv (kW)"] = siz["pv_kw"]
         df.at[idx, "battery (kWh)"] = siz["battery_kwh"]
+        df.at[idx, "battery_inverter (kW)"] = battery_inverter_kw
         df.at[idx, "generator (kW)"] = siz["generator_kw"]
         df.at[idx, "lcoe (€/kWh)"] = rep["lcoe"]
         df.at[idx, "npc (€)"] = rep["npc"]

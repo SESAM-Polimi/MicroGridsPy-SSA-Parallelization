@@ -5,10 +5,12 @@ Per cluster it:
   1. scaffolds projects/<cat>/inputs (config_map.build_project: formulation.json + YAMLs
      + demand/resource CSVs from the old archetype/PVGIS science);
   2. builds + solves the MultiYearModel with the requested solver (HiGHS by default);
-  3. exports the results bundle to projects/<cat>/results/ (design_by_step.csv,
-     reporting_summary.csv [holds LCOE], kpis_yearly.csv, ...).
+  3. exports results to projects/<cat>/results/. Default profile "core" writes the
+     lean bundle (summary.json [meta+metrics+sizing] + dispatch.<parquet|csv>);
+     profile "full" writes the legacy CSV+Excel bundle. Everything omitted by the
+     core profile is rebuilt offline by mgpy2.reporting.
 
-Completion marker: results/reporting_summary.csv  (replaces the old costs.csv).
+Completion marker: results/summary.json  (core profile; replaces reporting_summary.csv).
 
 The NEW engine resolves `projects/<name>` against the process CWD, so this module
 chdir's to the repo root (the folder containing `projects/`) before building/solving.
@@ -24,7 +26,7 @@ from typing import Optional
 from mgpy2.paths import ensure_engines_importable, repo_root
 from mgpy2.config_map import ThesisConfig, build_project
 
-COMPLETION_MARKER = "reporting_summary.csv"
+COMPLETION_MARKER = "summary.json"
 
 
 @dataclass
@@ -44,6 +46,17 @@ def _project_name_from_row(row: dict) -> str:
 
 def _read_lcoe(results_dir: Path) -> Optional[float]:
     import pandas as pd
+    # Core profile: LCOE lives in summary.json -> metrics.lcoe_per_kwh
+    sj = results_dir / "summary.json"
+    if sj.exists():
+        try:
+            import json
+            metrics = (json.loads(sj.read_text(encoding="utf-8")).get("metrics") or {})
+            v = metrics.get("lcoe_per_kwh")
+            return float(v) if v is not None else None
+        except Exception:
+            return None
+    # Legacy full-profile fallback: reporting_summary.csv
     rs = results_dir / "reporting_summary.csv"
     if not rs.exists():
         return None
@@ -132,6 +145,7 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
         export_multi_year_results(
             name, model.sets, model.data, model.model, model.vars,
             getattr(model.model, "solution", None), out_dir=paths.results_dir,
+            profile=cfg.export_profile, dispatch_format=cfg.dispatch_format,
         )
         lcoe = _read_lcoe(paths.results_dir)
         return RunResult(cat, "ok", objective=float(obj) if obj is not None else None, lcoe=lcoe)
@@ -168,6 +182,10 @@ if __name__ == "__main__":
                     help="write inputs only (PVGIS/demand); run on a node WITH internet")
     ap.add_argument("--solve-only", action="store_true",
                     help="skip input prep and solve existing inputs; for offline compute nodes")
+    ap.add_argument("--export-profile", default="core", choices=["core", "full"],
+                    help="core = lean bundle (summary.json + dispatch); full = legacy CSV+Excel bundle")
+    ap.add_argument("--dispatch-format", default="parquet", choices=["parquet", "csv"],
+                    help="container for the dispatch time series (core profile)")
     args = ap.parse_args()
 
     cfg = ThesisConfig(
@@ -175,6 +193,8 @@ if __name__ == "__main__":
         include_generator=args.include_generator,
         max_lost_load_fraction=args.max_lost_load,
         lost_load_cost_per_kwh=args.lost_load_cost,
+        export_profile=args.export_profile,
+        dispatch_format=args.dispatch_format,
     )
 
     csv_path = sample_path(args.csv)

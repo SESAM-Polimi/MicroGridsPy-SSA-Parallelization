@@ -34,12 +34,15 @@ echo "Run mode:          $RUN_MODE"
 echo "Solver:            $SOLVER"
 echo "Horizon:           $HORIZON"
 echo "Sample:            $SAMPLE_CSV"
+echo "Export profile:    $EXPORT_PROFILE ($DISPATCH_FORMAT)"
 
 python -m mgpy2.run_cluster \
     --task-id "$SGE_TASK_ID" \
     --csv "$SAMPLE_CSV" \
     --solver "$SOLVER" \
     --horizon "$HORIZON" \
+    --export-profile "$EXPORT_PROFILE" \
+    --dispatch-format "$DISPATCH_FORMAT" \
     $FEASIBILITY_FLAGS \
     $(mode_flag)
     

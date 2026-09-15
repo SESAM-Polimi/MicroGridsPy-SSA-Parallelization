@@ -2,8 +2,7 @@
 # =====================================================================
 # Progress of the current country run. From the repo root:
 #     bash hpc/monitor_jobs.sh
-# "Done" marker: projects/<cat>/results/reporting_summary.csv
-# (TODO plan 4.2: switch to status.json)
+# "Done" marker: projects/<cat>/results/summary.json (core export profile)
 # =====================================================================
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # OK here: run by hand, not via SGE
@@ -11,7 +10,7 @@ cd "$REPO_ROOT"
 source hpc/env.sh
 activate_env
 
-MARKER="reporting_summary.csv"
+MARKER="summary.json"
 TOTAL=$(python -m mgpy2.sample "$SAMPLE_CSV")
 
 # -mindepth/-maxdepth 3: only look at projects/<cat>/results/<file>

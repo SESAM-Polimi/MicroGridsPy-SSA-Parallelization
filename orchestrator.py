@@ -46,6 +46,10 @@ def main() -> None:
                     help="only write inputs (PVGIS/demand) in parallel; use on a login node with internet")
     ap.add_argument("--solve-only", action="store_true",
                     help="skip input prep; solve pre-staged inputs")
+    ap.add_argument("--export-profile", default="core", choices=["core", "full"],
+                    help="core = lean bundle (summary.json + dispatch); full = legacy CSV+Excel bundle")
+    ap.add_argument("--dispatch-format", default="parquet", choices=["parquet", "csv"],
+                    help="container for the dispatch time series (core profile)")
     args = ap.parse_args()
     prepare, solve = (not args.solve_only), (not args.prepare_only)
 
@@ -54,6 +58,8 @@ def main() -> None:
         include_generator=args.include_generator,
         max_lost_load_fraction=args.max_lost_load,
         lost_load_cost_per_kwh=args.lost_load_cost,
+        export_profile=args.export_profile,
+        dispatch_format=args.dispatch_format,
     )
 
     df = pd.read_csv(args.csv)

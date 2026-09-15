@@ -21,9 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from mgpy2.paths import projects_root, repo_root  # noqa: E402
 from mgpy2.sample import load_sample, sample_path  # noqa: E402
 
-# TODO (plan 4.2): replace with a per-task status.json written by run_cluster.
+# Completion marker written by run_cluster (core export profile).
 # If the output policy stops writing this file, EVERY task will look failed.
-MARKER = "reporting_summary.csv"
+MARKER = "summary.json"
 
 
 def main() -> None:

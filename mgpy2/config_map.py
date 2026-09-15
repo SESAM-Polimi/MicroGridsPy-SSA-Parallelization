@@ -108,6 +108,10 @@ class ThesisConfig:
     csv_delimiter: str = ","
     csv_decimal: str = "."
 
+    # HPC results-export policy
+    export_profile: str = "core"      # "core" = lean bundle (summary.json + dispatch); "full" = legacy CSV+Excel bundle
+    dispatch_format: str = "parquet"  # "parquet" (small/fast) or "csv" (comfortable for manual inspection)
+
     # PVGIS panel params (a.yaml resource_assessment)
     pv_nom_power_w: float = 1000.0
     pv_tilt: float = 10.0
