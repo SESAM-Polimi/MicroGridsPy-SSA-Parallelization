@@ -1,49 +1,48 @@
 #!/usr/bin/env python3
-"""
-make_failed_task_list_new.py — list SGE task IDs whose NEW-engine results are missing.
+"""List task ids whose results are missing, for hpc/submit_rerun_array.sh.
 
-A cluster is 'done' when projects/<cat>/results/reporting_summary.csv exists
-(replaces the old costs.csv marker). Writes 1-based task IDs to tasks_failed.txt
-for rerun via submit_rerun_array_new.sh.
+A task counts as 'done' when projects/<cat>/results/<MARKER> exists.
+Task ids come from mgpy2.sample, i.e. the SAME mapping the runs use.
+Writes one task id per line to tasks_failed.txt in the repo root.
+
+Usage (from the repo root, conda env active):
+    python hpc/make_failed_task_list.py [--csv PATH]
 """
 from __future__ import annotations
 
-import csv
+import argparse
+import sys
 from pathlib import Path
 
-from mgpy2.paths import projects_root, repo_root
+# Make "import mgpy2" work when this file is run as a script:
+# Python then puts hpc/ (not the repo root) on the import path.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-ROOT = repo_root()                       # repo root, regardless of this file's location
-CSV_PATH = ROOT / "advanced_sample.csv"
-OUT_PATH = ROOT / "tasks_failed.txt"
+from mgpy2.paths import projects_root, repo_root  # noqa: E402
+from mgpy2.sample import load_sample, sample_path  # noqa: E402
+
+# TODO (plan 4.2): replace with a per-task status.json written by run_cluster.
+# If the output policy stops writing this file, EVERY task will look failed.
 MARKER = "reporting_summary.csv"
 
 
 def main() -> None:
-    projects = projects_root()
-    # map cat -> 1-based task index (skip // comment rows)
-    cat_to_task = {}
-    with open(CSV_PATH, newline="", encoding="utf-8") as f:
-        rows = [ln for ln in f]
-    header_idx = next(i for i, ln in enumerate(rows) if not ln.strip().startswith("//"))
-    header = [c.strip() for c in rows[header_idx].strip().split(",")]
-    cat_idx = header.index("cat")
-    task = 0
-    for ln in rows[header_idx + 1:]:
-        if ln.strip().startswith("//") or not ln.strip():
-            continue
-        task += 1
-        cols = [c.strip() for c in ln.rstrip("\n").split(",")]
-        if cat_idx < len(cols):
-            cat_to_task[cols[cat_idx]] = task
+    ap = argparse.ArgumentParser(description="List tasks with missing results.")
+    ap.add_argument("--csv", default=None, help="sample file (default: $SAMPLE_CSV)")
+    args = ap.parse_args()
 
-    failed = sorted({
-        t for cat, t in cat_to_task.items()
+    df = load_sample(sample_path(args.csv))
+    projects = projects_root()
+
+    failed = [
+        task_id
+        for task_id, cat in df["cat"].astype(str).items()
         if not (projects / cat / "results" / MARKER).exists()
-    })
-    OUT_PATH.write_text(("\n".join(map(str, failed)) + "\n") if failed else "", encoding="utf-8")
-    print(f"{len(failed)} failed/incomplete tasks -> {OUT_PATH.name}"
-          if failed else "All clusters have results.")
+    ]
+
+    out = repo_root() / "tasks_failed.txt"
+    out.write_text("".join(f"{t}\n" for t in failed), encoding="utf-8")
+    print(f"{len(failed)} of {len(df)} tasks missing results -> {out.name}")
 
 
 if __name__ == "__main__":
