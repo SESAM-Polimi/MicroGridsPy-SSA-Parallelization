@@ -20,3 +20,7 @@ logs/
 # Local data / results (large; keep out of VCS)
 data/thesis_results_2026/
 *.gpkg
+
+# Engine projects: never track inputs/outputs of local runs
+engines/new/projects/*/
+!engines/new/projects/.gitkeep
