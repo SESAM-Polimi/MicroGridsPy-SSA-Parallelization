@@ -110,10 +110,11 @@ MGPy1 → MGPy2 engine change. Switch to `consistent` for the paper runs.
   repeated for all 20 years → `inputs/resource_availability.csv`.
 - **Needs internet on the node** in `RUN_MODE=full`. With offline nodes: prepare on the
   login node (`orchestrator.py --prepare-only`), then run with `RUN_MODE=solve-only`.
-- **[TODO] Today a failed download silently becomes ZERO sun** (`allow_zero_fallback=True`,
-  just a `WARN` line). PV+battery clusters then fail as infeasible; with a generator they
-  would silently become diesel-only. Planned fix: fail loudly so the task goes on the
-  rerun list.
+- **Fails loudly** (since 16 Sep 2026): each download has a timeout (10 s connect,
+  120 s read) and up to 3 attempts (waits 30 s, 60 s). If all fail, or PVGIS returns no
+  sun at all, the task ends with `results/error.txt` and appears on the rerun list.
+  (Before, a failure silently became ZERO sun. In the PV+battery baseline such clusters
+  were infeasible, so no August result is affected.)
 - PVGIS updates its database over time, so re-downloading later may not give identical inputs.
 
 ---
