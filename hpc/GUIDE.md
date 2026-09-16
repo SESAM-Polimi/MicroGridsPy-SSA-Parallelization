@@ -10,7 +10,7 @@ the `mgpy2` pipeline (new MicroGridsPy engine). One SGE array task = one cluster
 ```bash
 # 1. get the code with git (the cluster can reach GitHub); work in scratch
 cd /global-scratch/flash_pool/$USER
-git clone -b development https://github.com/SESAM-Polimi/MicroGridsPy-SSA-Parallelization.git
+git clone -b main https://github.com/SESAM-Polimi/MicroGridsPy-SSA-Parallelization.git
 cd MicroGridsPy-SSA-Parallelization
 # later updates:  git pull
 

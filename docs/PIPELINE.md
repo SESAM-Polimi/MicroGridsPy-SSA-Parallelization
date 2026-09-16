@@ -1,7 +1,7 @@
 # How the pipeline works
 
 _Owner's guide to what happens between a row of the country sample and a solved mini-grid.
-Written 16 Sep 2026 from the code on `development` and the thesis methodology
+Written 16 Sep 2026 from the code on `main` and the thesis methodology
 (Pieraccini, `02-Methodology.tex`). Where the two disagree, it is flagged **[CHECK]**._
 
 ---
@@ -181,7 +181,15 @@ Inputs stay in `projects/<cat>/inputs/` (~5 MB per cluster: demand + resource, 2
 
 ---
 
-## 8. Where to look
+## 8. Branches and versions
+
+- `main` is the only long-lived branch: it is always the version to run on the cluster.
+- Work happens on short-lived branches (e.g. `fix-pvgis`), merged into `main` through a
+  GitHub pull request.
+- Every production run gets a **tag** on the exact commit it used (e.g. `eth-aug2026`),
+  and the tag name is recorded with the results. Tags, not branches, link results to code.
+
+## 9. Where to look
 
 | Question | File |
 |---|---|
