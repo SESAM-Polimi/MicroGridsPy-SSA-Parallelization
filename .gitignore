@@ -24,3 +24,6 @@ data/thesis_results_2026/
 # Engine projects: never track inputs/outputs of local runs
 engines/new/projects/*/
 !engines/new/projects/.gitkeep
+
+# Old workflow copied the country sample to the repo root; use SAMPLE_CSV instead
+/advanced_sample.csv

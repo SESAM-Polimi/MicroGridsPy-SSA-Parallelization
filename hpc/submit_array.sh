@@ -3,6 +3,7 @@
 #$ -N mgpy_array
 #$ -cwd
 #$ -j y
+#$ -o /dev/null   # all output goes to logs/ (see exec below); avoids 1 empty SGE file per task
 
 set -euo pipefail
 
@@ -10,11 +11,14 @@ set -euo pipefail
 
 REPO_ROOT="$SGE_O_WORKDIR"
 cd "$REPO_ROOT"
+source "$REPO_ROOT/hpc/env.sh"
+check_disk_or_hold "$REPO_ROOT"
 
 mkdir -p "$REPO_ROOT/logs"
 
+# Job ID in the name: a rerun never overwrites the evidence of an earlier run
 PADDED=$(printf "%05d" "$SGE_TASK_ID")
-exec >"$REPO_ROOT/logs/${JOB_NAME}.${PADDED}.log" 2>&1
+exec >"$REPO_ROOT/logs/${JOB_NAME}.${JOB_ID}.${PADDED}.log" 2>&1
 
 echo "============================================================"
 echo "Start time:        $(date)"
@@ -25,13 +29,12 @@ echo "Working directory: $(pwd)"
 echo "SGE workdir:       $SGE_O_WORKDIR"
 echo "============================================================"
 
-source "$REPO_ROOT/hpc/env.sh"
 activate_env
 
 echo "Conda environment: $CONDA_ENV"
 echo "Python executable: $(command -v python)"
 echo "Run mode:          $RUN_MODE"
-echo "Solver:            $SOLVER"
+echo "Solver:            $SOLVER (threads=$SOLVER_THREADS, time limit=${SOLVER_TIME_LIMIT}s)"
 echo "Horizon:           $HORIZON"
 echo "Sample:            $SAMPLE_CSV"
 echo "Export profile:    $EXPORT_PROFILE ($DISPATCH_FORMAT)"
@@ -40,6 +43,8 @@ python -m mgpy2.run_cluster \
     --task-id "$SGE_TASK_ID" \
     --csv "$SAMPLE_CSV" \
     --solver "$SOLVER" \
+    --threads "$SOLVER_THREADS" \
+    --time-limit "$SOLVER_TIME_LIMIT" \
     --horizon "$HORIZON" \
     --export-profile "$EXPORT_PROFILE" \
     --dispatch-format "$DISPATCH_FORMAT" \

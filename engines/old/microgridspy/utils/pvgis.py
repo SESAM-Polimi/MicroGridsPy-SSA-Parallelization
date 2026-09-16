@@ -40,7 +40,8 @@ def data_download(URL: str) -> dict:
         None: If the request fails (i.e., status code is not 200).
     """
     # Make the request
-    response = requests.get(URL)
+    # timeout: without it a stalled connection blocks the cluster task for hours
+    response = requests.get(URL, timeout=(10, 120))
 
     # Check the response status
     if response.status_code == 200:

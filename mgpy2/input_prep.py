@@ -22,6 +22,7 @@ Unit bridges (the silent-risk conversions):
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Sequence
@@ -164,34 +165,62 @@ def compute_demand_kwh(row: dict, cfg: PrepConfig,
 # =============================================================================
 # Resource capacity factor (0..1) — shape (periods, years)
 # =============================================================================
-def compute_resource_cf(res: ResourceParams, cfg: PrepConfig,
-                        allow_zero_fallback: bool = True) -> np.ndarray:
-    """Return (periods, years) capacity factors. Typical year repeated across years."""
-    ensure_engines_importable()
+PVGIS_ATTEMPTS = 3          # tries per cluster before giving up
+PVGIS_RETRY_WAIT_S = 30     # wait 30 s, then 60 s, ... between tries
+
+
+def _download_pv_with_retry(res: ResourceParams):
+    """Call the PVGIS download, retrying transient failures.
+
+    Only network/HTTP/response problems are retried: requests errors, the ValueError the
+    downloader raises on a non-200 status, and a KeyError for an unexpected JSON body.
+    Anything else is a bug and is raised immediately.
+    """
+    import requests
     from microgridspy.utils.pvgis import download_pvgis_pv_data  # old engine
 
+    last_error: Optional[Exception] = None
+    for attempt in range(1, PVGIS_ATTEMPTS + 1):
+        try:
+            return download_pvgis_pv_data(
+                res_name="Solar PV", base_URL=res.base_url, output_format=res.output_format,
+                lat=res.lat, lon=res.lon, nom_power=res.nom_power, tilt=res.tilt, azimuth=res.azim,
+                ro_ground=res.ro_ground, k_T=res.k_T, NMOT=res.NMOT, T_NMOT=res.T_NMOT, G_NMOT=res.G_NMOT,
+            )
+        except (requests.RequestException, ValueError, KeyError) as e:
+            last_error = e
+            print(f"[input_prep][WARN] PVGIS attempt {attempt}/{PVGIS_ATTEMPTS} failed "
+                  f"for lat={res.lat} lon={res.lon}: {e}")
+            if attempt < PVGIS_ATTEMPTS:
+                time.sleep(PVGIS_RETRY_WAIT_S * attempt)
+    raise RuntimeError(
+        f"PVGIS download failed after {PVGIS_ATTEMPTS} attempts "
+        f"(lat={res.lat}, lon={res.lon}): {last_error}"
+    ) from last_error
+
+
+def compute_resource_cf(res: ResourceParams, cfg: PrepConfig) -> np.ndarray:
+    """Return (periods, years) capacity factors. Typical year repeated across years.
+
+    Fails loudly: if PVGIS cannot be reached (after retries) or returns no sun at all,
+    an exception is raised, so the cluster ends with error.txt and appears on the
+    rerun list. (Until Sep 2026 a failure silently became ZERO sun.)
+    """
+    ensure_engines_importable()
     periods, years = cfg.periods, cfg.years
-    try:
-        pv = download_pvgis_pv_data(
-            res_name="Solar PV", base_URL=res.base_url, output_format=res.output_format,
-            lat=res.lat, lon=res.lon, nom_power=res.nom_power, tilt=res.tilt, azimuth=res.azim,
-            ro_ground=res.ro_ground, k_T=res.k_T, NMOT=res.NMOT, T_NMOT=res.T_NMOT, G_NMOT=res.G_NMOT,
-        )
-        if isinstance(pv, pd.DataFrame):
-            series = pv.iloc[:, 0].to_numpy(dtype="float64")
-        else:
-            series = np.asarray(pv, dtype="float64").ravel()
-        cf_year = series / float(res.nom_power)  # energy-for-nom_power -> per-unit CF
-    except Exception as e:
-        if not allow_zero_fallback:
-            raise
-        print(f"[input_prep][WARN] PVGIS failed for lat={res.lat} lon={res.lon}: {e}. "
-              f"Falling back to zero solar.")
-        cf_year = np.zeros(periods, dtype="float64")
+
+    pv = _download_pv_with_retry(res)
+    if isinstance(pv, pd.DataFrame):
+        series = pv.iloc[:, 0].to_numpy(dtype="float64")
+    else:
+        series = np.asarray(pv, dtype="float64").ravel()
+    cf_year = series / float(res.nom_power)  # energy-for-nom_power -> per-unit CF
 
     if cf_year.shape[0] != periods:
         raise ValueError(f"PVGIS returned {cf_year.shape[0]} periods, expected {periods}.")
     cf_year = np.clip(cf_year, 0.0, None)  # guard tiny negatives from temp term
+    if not np.isfinite(cf_year).all() or cf_year.max() <= 0.0:
+        raise ValueError(f"PVGIS data for lat={res.lat} lon={res.lon} has no usable solar output.")
     return np.tile(cf_year.reshape(periods, 1), (1, years))
 
 
