@@ -72,18 +72,16 @@ rows starting with `//` are comments and are skipped.
 6. Wh → kWh, written as `inputs/load_demand.csv` (8760 rows × 20 year columns).
 
 What this means:
-- **The archetype profiles are fixed files.** RAMP (stochastic) was used once to create
-  them; no RAMP runs here. Clusters with the same zone, cooling type and tier mix have
-  **identical hourly shapes**, differing only in scale.
-  **[CHECK]** The thesis says "demand time series are generated using the RAMP model".
-  Make sure the paper describes it as *archetype profiles generated with RAMP*.
-- **Zone boundaries are sharp:** neighbouring clusters either side of 10°N (crossing
-  Ethiopia) get different profiles.
-- **[CHECK]** Households are divided by 100 (one archetype file = 100 households?),
-  hospitals are not. Confirm against the archetype source
-  ("Archetypes of Rural Users in Sub-Saharan Africa for Load Demand Estimation").
-- **[CHECK]** A missing `cooling` value becomes `NC` (no cooling). Count how many rows
-  this affects; in hot areas it underestimates demand.
+- **The archetypes are fixed profiles built with RAMP** (N. Stevanato et al., *Archetypes of
+  Rural Users in Sub-Saharan Africa for Load Demand Estimation*). RAMP ran once, when the
+  archetypes were created; no RAMP runs happen here. This is what the thesis means by
+  "demand generated using RAMP". Clusters with the same zone, cooling type and tier mix
+  therefore have **identical hourly shapes**, differing only in scale.
+- **Household archetypes describe 100 households** (hence `count / 100`); hospital
+  archetypes describe one facility (hence `count × profile`). Confirmed by the archetypes' author.
+- **Zone boundaries are sharp:** neighbouring clusters either side of a zone limit
+  (e.g. 10°N, crossing Ethiopia) get different profiles. This is by design of the archetypes.
+- A missing `cooling` value defaults to `NC` (no cooling). Accepted behaviour.
 
 ### 3.1 Demand growth: the known quirk
 
