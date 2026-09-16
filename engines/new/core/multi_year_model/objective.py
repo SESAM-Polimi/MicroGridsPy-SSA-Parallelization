@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict
+from numbers import Number
+from typing import Dict, Iterable
 
 import numpy as np
 import xarray as xr
@@ -43,6 +44,31 @@ def _require_finite_da(name: str, da: xr.DataArray | None) -> xr.DataArray:
 def _finite_or_zero(da: xr.DataArray | float | int) -> xr.DataArray:
     out = xr.DataArray(da)
     return xr.where(np.isfinite(out), out, 0.0)
+
+
+def _signed_sum(plus: Iterable = (), minus: Iterable = ()):
+    """Add ``plus`` terms and subtract ``minus`` terms, expressions first.
+
+    Any term may be a plain number (0.0) when a component is disabled
+    (no generator, no grid, no subsidy). linopy 0.5.x, the version on the
+    cluster, cannot evaluate ``number - expression`` (and ``number + expression``
+    is not guaranteed either), so the running total must start from an
+    expression. Terms are therefore reordered: expressions before numbers,
+    added terms before subtracted ones. The result is mathematically identical.
+    """
+    terms = [(t, 1) for t in plus] + [(t, -1) for t in minus]
+    # sort keys: plain numbers last, then subtracted terms last (stable sort)
+    terms.sort(key=lambda ts: (isinstance(ts[0], Number), ts[1] < 0))
+
+    total = None
+    for term, sign in terms:
+        if total is None:
+            total = term if sign > 0 else -term
+        elif sign > 0:
+            total = total + term
+        else:
+            total = total - term
+    return 0.0 if total is None else total
 
 
 def _crf(rate: xr.DataArray | float, lifetime: xr.DataArray | float) -> xr.DataArray:
@@ -231,16 +257,18 @@ def initialize_objective(
     else:
         gen_fom_y_s = 0.0
 
-    opex_y_s = (
-        fuel_cost_y_s
-        + grid_import_cost_y_s
-        - grid_export_rev_y_s
-        - res_subsidy_rev_y_s
-        + res_fom_y_s
-        + bat_fom_y_s
-        + res_inv_fom_y_s
-        + bat_inv_fom_y_s
-        + gen_fom_y_s
+    # Terms can be plain 0.0 (disabled components): see _signed_sum.
+    opex_y_s = _signed_sum(
+        plus=(
+            fuel_cost_y_s,
+            grid_import_cost_y_s,
+            res_fom_y_s,
+            bat_fom_y_s,
+            res_inv_fom_y_s,
+            bat_inv_fom_y_s,
+            gen_fom_y_s,
+        ),
+        minus=(grid_export_rev_y_s, res_subsidy_rev_y_s),
     )
 
     # ------------------------------------------------------------------
@@ -262,7 +290,7 @@ def initialize_objective(
     else:
         grid_scope2_cost_y_s = 0.0
 
-    ext_y_s = ll_cost_y_s + direct_em_cost_y_s + grid_scope2_cost_y_s
+    ext_y_s = _signed_sum(plus=(ll_cost_y_s, direct_em_cost_y_s, grid_scope2_cost_y_s))
     expected_cashflow_y = annuity_y + ((opex_y_s + ext_y_s) * w_s).sum("scenario")
 
     # Embedded emissions at commissioning year (optional)
