@@ -40,12 +40,7 @@ echo "Projects dir:      ${MGPY2_PROJECTS_DIR:-<repo>/projects}"
 echo "Slots (NSLOTS):    ${NSLOTS:-1}"
 echo "Horizon:           $HORIZON"
 
-# "Method=2;Crossover=0" -> (--solver-opt Method=2 --solver-opt Crossover=0)
-OPT_FLAGS=()
-IFS=';' read -r -a _opts <<< "$SOLVER_OPTS"
-for kv in ${_opts[@]+"${_opts[@]}"}; do
-    if [[ -n "$kv" ]]; then OPT_FLAGS+=(--solver-opt "$kv"); fi
-done
+build_opt_flags   # -> OPT_FLAGS (hpc/env.sh)
 echo "Sample:            $SAMPLE_CSV"
 echo "Export profile:    $EXPORT_PROFILE ($DISPATCH_FORMAT)"
 

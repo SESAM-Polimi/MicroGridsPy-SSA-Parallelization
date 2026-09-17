@@ -30,3 +30,7 @@ engines/new/projects/*/
 
 # thread benchmarks (hpc/benchmark_threads.sh)
 /bench/
+
+# comparison runs (hpc/make_compare_list.py + submit_rerun_array.sh)
+/compare/
+/compare_tasks.txt

@@ -6,8 +6,11 @@
 #$ -o /dev/null   # all output goes to logs/ (see exec below)
 # =====================================================================
 # SGE array task for RERUNS.
-# Array index i -> line i of tasks_failed.txt, which holds a real task id
-# (a row of $SAMPLE_CSV, see mgpy2/sample.py).
+# Array index i -> line i of $TASK_LIST (default tasks_failed.txt). Each line
+# starts with a real task id (a row of $SAMPLE_CSV, see mgpy2/sample.py);
+# anything after the first whitespace (e.g. a comment) is ignored.
+# Any hand-made list works too, e.g. a comparison set:
+#   qsub ... -v SAMPLE_CSV=...,TASK_LIST=compare_tasks.txt -t 1-50 hpc/submit_rerun_array.sh
 #
 # From the REPO ROOT:
 #   source hpc/env.sh && activate_env
@@ -31,12 +34,16 @@ exec >"logs/${JOB_NAME}.${JOB_ID}.${PADDED}.log" 2>&1
 
 activate_env
 
-[ -f tasks_failed.txt ] || { echo "tasks_failed.txt not found. Run: python hpc/make_failed_task_list.py"; exit 1; }
-ACTUAL_TASK_ID=$(sed -n "${SGE_TASK_ID}p" tasks_failed.txt)
+TASK_LIST="${TASK_LIST:-tasks_failed.txt}"
+[ -f "$TASK_LIST" ] || { echo "$TASK_LIST not found (default list: python hpc/make_failed_task_list.py)"; exit 1; }
+ACTUAL_TASK_ID=$(sed -n "${SGE_TASK_ID}p" "$TASK_LIST" | awk '{print $1}')
 [ -n "$ACTUAL_TASK_ID" ] || { echo "Invalid array index $SGE_TASK_ID"; exit 1; }
 
 echo "[$(date)] rerun idx=$SGE_TASK_ID -> task=$ACTUAL_TASK_ID node=$(hostname)"
-echo "Sample: $SAMPLE_CSV | Solver: $SOLVER | Horizon: $HORIZON"
+echo "List: $TASK_LIST | Sample: $SAMPLE_CSV | Horizon: $HORIZON"
+echo "Solver: $SOLVER (threads=$SOLVER_THREADS, options=${SOLVER_OPTS:-<none>}) | Export: $EXPORT_PROFILE ($DISPATCH_FORMAT)"
+echo "Projects dir: ${MGPY2_PROJECTS_DIR:-<repo>/projects}"
+build_opt_flags   # -> OPT_FLAGS (hpc/env.sh)
 
 python -m mgpy2.run_cluster \
     --task-id "$ACTUAL_TASK_ID" \
@@ -44,7 +51,10 @@ python -m mgpy2.run_cluster \
     --solver "$SOLVER" \
     --threads "$SOLVER_THREADS" \
     --time-limit "$SOLVER_TIME_LIMIT" \
+    ${OPT_FLAGS[@]+"${OPT_FLAGS[@]}"} \
     --horizon "$HORIZON" \
+    --export-profile "$EXPORT_PROFILE" \
+    --dispatch-format "$DISPATCH_FORMAT" \
     $FEASIBILITY_FLAGS \
     $(mode_flag)
 

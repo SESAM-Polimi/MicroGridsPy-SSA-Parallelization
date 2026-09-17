@@ -17,10 +17,10 @@ export SAMPLE_CSV
 
 # --- SGE resources (applied via qsub CLI, so they are never ignored) ---
 SGE_QUEUE="${SGE_QUEUE:-energia.q}"
-SGE_NODES="${SGE_NODES:-node-1-3}"  # or "" for no restriction
-H_VMEM="${H_VMEM:-5G}"      # Aug 2026 run peaked at 2.8 GB (maxvmem, full export)
+SGE_NODES="${SGE_NODES:-node-1-3}"  # "" = no restriction; two nodes: "node-1-2|node-1-3"
+H_VMEM="${H_VMEM:-4G}"      # per slot. Benchmark 17 Sep 2026: peak 2.3 GB (barrier+crossover, core export)
 H_RT="${H_RT:-06:00:00}"
-MAX_CONCURRENT="${MAX_CONCURRENT:-16}"
+MAX_CONCURRENT="${MAX_CONCURRENT:-16}"   # 16 cores per node: use 32 with two nodes
 
 # --- model / pipeline options ---
 SOLVER="${SOLVER:-gurobi}"
@@ -30,9 +30,16 @@ SOLVER="${SOLVER:-gurobi}"
 # Inside an SGE job submitted with "-pe smp N", SGE sets NSLOTS=N: the thread count
 # then follows the cores actually reserved (no oversubscription). Default 1.
 SOLVER_THREADS="${SOLVER_THREADS:-${NSLOTS:-1}}"
-# Extra solver-native options, ';'-separated (no commas: qsub -v splits on them),
-# e.g. SOLVER_OPTS="Method=2;Crossover=0". Empty = solver defaults.
-SOLVER_OPTS="${SOLVER_OPTS:-}"
+# Extra solver-native options, ';'-separated (no commas: qsub -v splits on them).
+# Default for Gurobi = barrier WITH crossover (benchmark 17 Sep 2026: 91 core-s/task,
+# clean dispatch). NEVER Crossover=0: it charges and discharges the battery at once.
+# Note "${VAR-default}" (no colon): an explicitly EMPTY value (SOLVER_OPTS=) is kept,
+# so benchmarks can still request pure solver defaults.
+if [ "$SOLVER" = "gurobi" ]; then
+  SOLVER_OPTS="${SOLVER_OPTS-Method=2}"
+else
+  SOLVER_OPTS="${SOLVER_OPTS-}"
+fi
 SOLVER_TIME_LIMIT="${SOLVER_TIME_LIMIT:-18000}"   # seconds (5 h; H_RT is 6 h)
 HORIZON="${HORIZON:-20}"
 # System extensions (OPTIONAL). PV+battery only is feasible by default (the thesis
@@ -68,6 +75,17 @@ check_disk_or_hold() {
        "(quota full?). Array put on hold." >> "$HOME/mgpy_disk_alert.log"
   [ -n "${JOB_ID:-}" ] && { qhold "$JOB_ID" >/dev/null 2>&1 || true; }
   exit 3
+}
+
+# "Method=2;Crossover=0" -> OPT_FLAGS=(--solver-opt Method=2 --solver-opt Crossover=0)
+# Fills the global array OPT_FLAGS (bash functions cannot return arrays).
+build_opt_flags() {
+  OPT_FLAGS=()
+  local _opts kv
+  IFS=';' read -r -a _opts <<< "$SOLVER_OPTS"
+  for kv in ${_opts[@]+"${_opts[@]}"}; do
+    if [[ -n "$kv" ]]; then OPT_FLAGS+=(--solver-opt "$kv"); fi
+  done
 }
 
 mode_flag() { [ "$RUN_MODE" = "solve-only" ] && echo "--solve-only" || echo ""; }

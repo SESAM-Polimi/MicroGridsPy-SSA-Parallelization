@@ -19,6 +19,9 @@ NUM_ROWS=$(python -m mgpy2.sample "$SAMPLE_CSV") \
 # Build SGE resource args from env.sh (applied on the CLI => always honoured).
 RES=(-q "$SGE_QUEUE" -l "h_vmem=$H_VMEM" -l "h_rt=$H_RT")
 [ -n "$SGE_NODES" ] && RES+=(-l "hostname=$SGE_NODES")
+# More than one thread per task => reserve that many cores on ONE node, otherwise
+# SGE counts the task as 1 core and oversubscribes the node.
+if [ "$SOLVER_THREADS" -gt 1 ]; then RES+=(-pe smp "$SOLVER_THREADS"); fi
 
 # Pass the sample path to every task: each task starts a fresh shell on the
 # compute node, so without -v a value set here would be lost there.
@@ -28,7 +31,7 @@ echo "=========================================="
 echo "MicroGridsPy country run (NEW engine)"
 echo "Clusters:    $NUM_ROWS   (array 1-$NUM_ROWS, max $MAX_CONCURRENT concurrent)"
 echo "Sample:      $SAMPLE_CSV"
-echo "Solver:      $SOLVER (threads $SOLVER_THREADS, limit ${SOLVER_TIME_LIMIT}s) | horizon $HORIZON | mode $RUN_MODE"
+echo "Solver:      $SOLVER (threads $SOLVER_THREADS, limit ${SOLVER_TIME_LIMIT}s, options ${SOLVER_OPTS:-<none>}) | horizon $HORIZON | mode $RUN_MODE"
 echo "Export:      $EXPORT_PROFILE ($DISPATCH_FORMAT)"
 echo "Feasibility: $FEASIBILITY_FLAGS"
 echo "Resources:   ${RES[*]}"
