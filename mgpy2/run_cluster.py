@@ -151,9 +151,12 @@ def code_version() -> str:
     if env:
         return env
     try:
+        # Keep to options that git 1.8 (the cluster's git) understands: no `-C`
+        # (git >= 1.8.5) and no `--no-optional-locks` (git >= 2.15). Use cwd=
+        # instead of -C; rev-parse only reads, so it never takes a lock anyway.
         out = subprocess.run(
-            ["git", "--no-optional-locks", "-C", str(repo_root()), "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=10,
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(repo_root()), capture_output=True, text=True, timeout=10,
         )
         return out.stdout.strip() or "unknown"
     except Exception:
