@@ -96,7 +96,7 @@ The thesis text says **3 % for all clusters**. `demand_growth_mode = "consistent
 one uniform `(1 + g)^y` to everything.
 **Decision (15 Sep 2026):** keep `thesis_faithful` for the Ethiopia re-run, to isolate the
 MGPy1 → MGPy2 engine change. Switch to `consistent` for the paper runs.
-**[CHECK]** Every result should record which mode it used (`summary.json` → `meta`).
+Every result records the mode it used: `summary.json` → `meta.run.pipeline_config.demand_growth_mode`.
 
 ---
 
@@ -145,8 +145,15 @@ Solver: Gurobi 12.0.3 on the cluster (`SOLVER`, `SOLVER_THREADS=1`,
 A cluster counts as solved only if the solver reports optimal with a finite objective;
 otherwise `results/error.txt` is written.
 
-**[CHECK]** For GHSL_563 (Aug 2026), objective = 786,159 but reported NPC = 659,178.
-Understand the difference (salvage? penalties? discounting?) before publishing LCOE.
+**Resolved (17 Sep 2026).** For GHSL_563 (Aug 2026) objective = 786,159 but reported
+NPC = 659,178: the old full-export cash-flow reconstruction omitted PV/battery/generator
+fixed O&M (fixed in b0df22e). The core export uses the objective directly (correct).
+August LCOEs are therefore ~12-17 % too low (Sep/Aug ratio 1.13-1.20).
+
+**Batteries start full** (by design). With a zero solar series the model does not become
+infeasible: it builds a huge battery that starts full (Aug 2026: 7 clusters, LCOE ~1,500
+€/kWh, caused by the old zero-sun PVGIS fallback, now removed). The input guard in
+`input_prep` rejects all-zero series.
 
 ---
 
@@ -171,7 +178,12 @@ Profile `core` (default, `EXPORT_PROFILE` in `hpc/env.sh`):
 - `results/summary.json`: meta, metrics (NPC, LCOE, investment), sizing. **This file is
   the completion marker** used by `run_cluster` (skip if present), `monitor_jobs.sh` and
   `make_failed_task_list.py`.
-- `results/dispatch.parquet`: hourly operation (CSV if pyarrow is missing).
+  `meta.run` holds the provenance: code version (`-dirty` = uncommitted changes), solver,
+  solver version and parameters, status, prep/solve seconds, full `ThesisConfig`
+  (incl. `demand_growth_mode`), host, SGE job/task id, finish time.
+- `results/dispatch.parquet`: hourly operation (CSV if pyarrow is missing; none with
+  `DISPATCH_FORMAT=none`). The hourly dispatch is **not unique** (many schedules have the
+  same cost): use only totals, never hourly profiles, for analysis.
 - on failure: `results/error.txt`.
 
 Everything else (energy balance, KPIs, cash flows, reporting summary, Excel) can be rebuilt
