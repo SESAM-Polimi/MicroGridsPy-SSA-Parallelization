@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from mgpy2.paths import ensure_engines_importable, repo_root
+from mgpy2.paths import ensure_engines_importable, run_cwd
 from mgpy2.config_map import ThesisConfig, build_project
 
 COMPLETION_MARKER = "summary.json"
@@ -38,12 +38,36 @@ class RunResult:
     message: str = ""
 
 
+def _coerce(raw: str):
+    """'2' -> 2, '1e-6' -> 1e-06, 'barrier' -> 'barrier' (solvers want real numbers)."""
+    for cast in (int, float):
+        try:
+            return cast(raw)
+        except ValueError:
+            pass
+    return raw
+
+
+def parse_solver_opts(items) -> dict:
+    """['Method=2', 'Crossover=0'] -> {'Method': 2, 'Crossover': 0}."""
+    opts: dict = {}
+    for item in items or ():
+        key, sep, raw = str(item).partition("=")
+        if not sep or not key.strip():
+            raise ValueError(f"--solver-opt expects KEY=VALUE, got {item!r}")
+        opts[key.strip()] = _coerce(raw.strip())
+    return opts
+
+
 def solver_params_for(solver: str, threads: Optional[int] = None,
-                      time_limit: Optional[float] = None) -> dict:
+                      time_limit: Optional[float] = None,
+                      extra: Optional[dict] = None) -> dict:
     """Translate generic limits into the option names each solver expects.
 
     Gurobi: Threads / TimeLimit.  HiGHS: threads / time_limit.
     Only limits that were actually given are returned (None = solver default).
+    `extra` holds solver-native options (e.g. {'Method': 2}) and is applied last,
+    so an explicit extra option wins over the generic ones.
     """
     names = {"gurobi": ("Threads", "TimeLimit"), "highs": ("threads", "time_limit")}
     if solver not in names:
@@ -54,6 +78,7 @@ def solver_params_for(solver: str, threads: Optional[int] = None,
         params[threads_key] = int(threads)
     if time_limit is not None:
         params[time_key] = float(time_limit)
+    params.update(extra or {})
     return params
 
 
@@ -121,7 +146,7 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
       * solve only  (compute node, no internet): run_cluster(..., prepare=False)
     """
     cfg = cfg or ThesisConfig()
-    os.chdir(repo_root())  # so project_paths() (cwd/projects) matches our projects dir
+    os.chdir(run_cwd())  # engine reads <cwd>/projects; this honours MGPY2_PROJECTS_DIR
 
     ensure_engines_importable()
     from core.io.utils import project_paths
@@ -196,6 +221,8 @@ if __name__ == "__main__":
                     help="solver threads (use 1 per SGE slot)")
     ap.add_argument("--time-limit", type=float, default=None,
                     help="solver time limit in seconds (keep below h_rt)")
+    ap.add_argument("--solver-opt", action="append", default=[], metavar="KEY=VALUE",
+                    help="solver-native option, repeatable (e.g. --solver-opt Method=2)")
     ap.add_argument("--include-generator", action="store_true",
                     help="add a diesel backup (feasibility option)")
     ap.add_argument("--max-lost-load", type=float, default=0.0,
@@ -233,7 +260,8 @@ if __name__ == "__main__":
         row = row_for_task(df, args.task_id)
 
     res = run_cluster(row, cfg=cfg, solver=args.solver,
-                      solver_params=solver_params_for(args.solver, args.threads, args.time_limit),
+                      solver_params=solver_params_for(args.solver, args.threads, args.time_limit,
+                                                    extra=parse_solver_opts(args.solver_opt)),
                       prepare=not args.solve_only, solve=not args.prepare_only)
     print(f"[{res.cat}] {res.status} obj={res.objective} lcoe={res.lcoe} {res.message}")
     raise SystemExit(0 if res.status in ("ok", "skip", "prepared") else 1)

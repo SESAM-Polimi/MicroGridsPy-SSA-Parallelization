@@ -35,7 +35,17 @@ echo "Conda environment: $CONDA_ENV"
 echo "Python executable: $(command -v python)"
 echo "Run mode:          $RUN_MODE"
 echo "Solver:            $SOLVER (threads=$SOLVER_THREADS, time limit=${SOLVER_TIME_LIMIT}s)"
+echo "Solver options:    ${SOLVER_OPTS:-<none>}"
+echo "Projects dir:      ${MGPY2_PROJECTS_DIR:-<repo>/projects}"
+echo "Slots (NSLOTS):    ${NSLOTS:-1}"
 echo "Horizon:           $HORIZON"
+
+# "Method=2;Crossover=0" -> (--solver-opt Method=2 --solver-opt Crossover=0)
+OPT_FLAGS=()
+IFS=';' read -r -a _opts <<< "$SOLVER_OPTS"
+for kv in ${_opts[@]+"${_opts[@]}"}; do
+    if [[ -n "$kv" ]]; then OPT_FLAGS+=(--solver-opt "$kv"); fi
+done
 echo "Sample:            $SAMPLE_CSV"
 echo "Export profile:    $EXPORT_PROFILE ($DISPATCH_FORMAT)"
 
@@ -45,6 +55,7 @@ python -m mgpy2.run_cluster \
     --solver "$SOLVER" \
     --threads "$SOLVER_THREADS" \
     --time-limit "$SOLVER_TIME_LIMIT" \
+    ${OPT_FLAGS[@]+"${OPT_FLAGS[@]}"} \
     --horizon "$HORIZON" \
     --export-profile "$EXPORT_PROFILE" \
     --dispatch-format "$DISPATCH_FORMAT" \

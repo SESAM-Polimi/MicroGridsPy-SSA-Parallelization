@@ -27,7 +27,12 @@ SOLVER="${SOLVER:-gurobi}"
 # One core per SGE slot: without this Gurobi may start many threads per task and
 # overload the node (SGE "alarm" state). Time limit < H_RT, so a slow cluster ends
 # with a recorded status (error.txt) instead of being killed silently by SGE.
-SOLVER_THREADS="${SOLVER_THREADS:-1}"
+# Inside an SGE job submitted with "-pe smp N", SGE sets NSLOTS=N: the thread count
+# then follows the cores actually reserved (no oversubscription). Default 1.
+SOLVER_THREADS="${SOLVER_THREADS:-${NSLOTS:-1}}"
+# Extra solver-native options, ';'-separated (no commas: qsub -v splits on them),
+# e.g. SOLVER_OPTS="Method=2;Crossover=0". Empty = solver defaults.
+SOLVER_OPTS="${SOLVER_OPTS:-}"
 SOLVER_TIME_LIMIT="${SOLVER_TIME_LIMIT:-18000}"   # seconds (5 h; H_RT is 6 h)
 HORIZON="${HORIZON:-20}"
 # System extensions (OPTIONAL). PV+battery only is feasible by default (the thesis

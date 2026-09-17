@@ -46,6 +46,20 @@ def projects_root() -> Path:
     return Path(env).resolve() if env else (repo_root() / "projects")
 
 
+def run_cwd() -> Path:
+    """Directory the NEW engine must run from: the PARENT of the projects dir.
+
+    The engine hardcodes `<cwd>/projects` (core.io.utils.get_projects_root), so a
+    custom MGPY2_PROJECTS_DIR only works if its last component is 'projects'.
+    """
+    root = projects_root()
+    if root.name != "projects":
+        raise ValueError(
+            f"MGPY2_PROJECTS_DIR must end in a folder named 'projects' (got {root}); "
+            "the new engine always looks for <cwd>/projects")
+    return root.parent
+
+
 def data_sheet_dir() -> Path:
     env = os.environ.get("MGPY2_DATA_SHEET")
     return Path(env).resolve() if env else (repo_root() / "data" / "data_sheet")
