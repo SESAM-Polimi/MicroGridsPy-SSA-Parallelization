@@ -19,11 +19,15 @@ That makes local (ProcessPool) and HPC (SGE task) runs behave identically.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+import platform
+import subprocess
+import time
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from mgpy2.paths import ensure_engines_importable, run_cwd
+from mgpy2.paths import ensure_engines_importable, repo_root, run_cwd
 from mgpy2.config_map import ThesisConfig, build_project
 
 COMPLETION_MARKER = "summary.json"
@@ -136,6 +140,58 @@ def _status_ok(status: str, objective: Optional[float]) -> bool:
     return ("optimal" in t) or ("feasible" in t) or (t.strip() == "ok")
 
 
+def code_version() -> str:
+    """Commit of the code that produced a result.
+
+    Prefer $MGPY2_CODE_VERSION (computed ONCE by the submit script, incl. a
+    '-dirty' flag): thousands of tasks must not each run `git status` on the same
+    repository. Fallback: a read-only `git rev-parse` (takes no lock).
+    """
+    env = os.environ.get("MGPY2_CODE_VERSION")
+    if env:
+        return env
+    try:
+        out = subprocess.run(
+            ["git", "--no-optional-locks", "-C", str(repo_root()), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return out.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _solver_version(solver: str) -> str:
+    try:
+        if solver == "gurobi":
+            import gurobipy
+            return ".".join(str(v) for v in gurobipy.gurobi.version())
+        if solver == "highs":
+            import highspy
+            return str(getattr(highspy, "__version__", "unknown"))
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _run_info(cfg: ThesisConfig, solver: str, solver_params: dict, status: str,
+              prep_s: Optional[float], solve_s: float) -> dict:
+    """Everything needed later to say HOW a summary.json was produced."""
+    return {
+        "code_version": code_version(),
+        "solver": solver,
+        "solver_version": _solver_version(solver),
+        "solver_params": dict(solver_params),     # incl. Threads, TimeLimit, Method...
+        "solver_status": status,
+        "prep_seconds": None if prep_s is None else round(prep_s, 2),
+        "solve_seconds": round(solve_s, 2),
+        "pipeline_config": asdict(cfg),           # demand_growth_mode, costs, horizon...
+        "host": platform.node(),
+        "sge_job_id": os.environ.get("JOB_ID"),
+        "sge_task_id": os.environ.get("SGE_TASK_ID"),
+        "finished_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
 def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
                 solver: str = "highs", solver_params: Optional[dict] = None,
                 skip_if_done: bool = True, prepare: bool = True, solve: bool = True) -> RunResult:
@@ -160,9 +216,12 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
     if skip_if_done and (paths.results_dir / COMPLETION_MARKER).exists():
         return RunResult(cat, "skip", message="results already exist")
 
+    prep_s: Optional[float] = None
     if prepare:
+        t0 = time.perf_counter()
         try:
             build_project(name, row, cfg, overwrite=True)
+            prep_s = time.perf_counter() - t0
         except Exception as e:
             _write_error(paths.results_dir, f"input prep failed: {e}")
             return RunResult(cat, "error", message=f"prep: {e}")
@@ -174,11 +233,13 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
 
     try:
         model = MultiYearModel(project_name=name)
+        t0 = time.perf_counter()
         sol = model.solve_single_objective(
             solver=solver,
             solver_params=solver_params or {},
             log_file_path=paths.logs_dir / f"{solver}_solve.log",
         )
+        solve_s = time.perf_counter() - t0   # build + solve (the engine does both here)
         status = str(sol.attrs.get("status", ""))
         obj = sol.attrs.get("objective_value")
 
@@ -190,6 +251,8 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
             name, model.sets, model.data, model.model, model.vars,
             getattr(model.model, "solution", None), out_dir=paths.results_dir,
             profile=cfg.export_profile, dispatch_format=cfg.dispatch_format,
+            status=status, solver=solver,
+            run_info=_run_info(cfg, solver, solver_params or {}, status, prep_s, solve_s),
         )
         lcoe = _read_lcoe(paths.results_dir)
         return RunResult(cat, "ok", objective=float(obj) if obj is not None else None, lcoe=lcoe)
@@ -234,8 +297,9 @@ if __name__ == "__main__":
                     help="skip input prep and solve existing inputs; for offline compute nodes")
     ap.add_argument("--export-profile", default="core", choices=["core", "full"],
                     help="core = lean bundle (summary.json + dispatch); full = legacy CSV+Excel bundle")
-    ap.add_argument("--dispatch-format", default="parquet", choices=["parquet", "csv"],
-                    help="container for the dispatch time series (core profile)")
+    ap.add_argument("--dispatch-format", default="parquet", choices=["parquet", "csv", "none"],
+                    help="container for the dispatch time series (core profile); "
+                         "'none' = summary.json only")
     args = ap.parse_args()
 
     cfg = ThesisConfig(

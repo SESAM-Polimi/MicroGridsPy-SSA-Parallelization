@@ -1679,6 +1679,9 @@ def export_multi_year_results(
     *,
     profile: str = "full",
     dispatch_format: str = "parquet",
+    status: Optional[str] = None,
+    solver: Optional[str] = None,
+    run_info: Optional[Dict[str, Any]] = None,
 ) -> dict:
     """Export multi-year results.
 
@@ -1694,6 +1697,7 @@ def export_multi_year_results(
         return export_core_outputs(
             project_name, sets, data, model, vars, solution,
             out_dir=out_dir, dispatch_format=dispatch_format,
+            status=status, solver=solver, run_info=run_info,
         )
 
     if out_dir is None:

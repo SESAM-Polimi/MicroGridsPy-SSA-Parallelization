@@ -27,12 +27,19 @@ if [ "$SOLVER_THREADS" -gt 1 ]; then RES+=(-pe smp "$SOLVER_THREADS"); fi
 # compute node, so without -v a value set here would be lost there.
 RES+=(-v "SAMPLE_CSV=$SAMPLE_CSV")
 
+# Code version, computed ONCE here and stamped into every summary.json.
+# "-dirty" = uncommitted changes: results would not be reproducible from git.
+CODE_VERSION=$(git --no-optional-locks describe --always --dirty 2>/dev/null || echo unknown)
+RES+=(-v "MGPY2_CODE_VERSION=$CODE_VERSION")
+
 echo "=========================================="
 echo "MicroGridsPy country run (NEW engine)"
 echo "Clusters:    $NUM_ROWS   (array 1-$NUM_ROWS, max $MAX_CONCURRENT concurrent)"
 echo "Sample:      $SAMPLE_CSV"
 echo "Solver:      $SOLVER (threads $SOLVER_THREADS, limit ${SOLVER_TIME_LIMIT}s, options ${SOLVER_OPTS:-<none>}) | horizon $HORIZON | mode $RUN_MODE"
 echo "Export:      $EXPORT_PROFILE ($DISPATCH_FORMAT)"
+echo "Code:        $CODE_VERSION"
+if [[ "$CODE_VERSION" == *-dirty ]]; then echo "WARNING: uncommitted changes -> results not reproducible from git"; fi
 echo "Feasibility: $FEASIBILITY_FLAGS"
 echo "Resources:   ${RES[*]}"
 echo "Env:         $CONDA_ENV @ $CONDA_BASE"

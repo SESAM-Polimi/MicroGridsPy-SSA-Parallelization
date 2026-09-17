@@ -52,7 +52,7 @@ RUN_MODE="${RUN_MODE:-full}"
 # Results export policy (flash-optimised). "core" writes only summary.json + dispatch.<fmt>
 # (everything else is rebuilt offline by mgpy2.reporting); "full" writes the legacy bundle.
 EXPORT_PROFILE="${EXPORT_PROFILE:-core}"
-DISPATCH_FORMAT="${DISPATCH_FORMAT:-parquet}"   # parquet (small/fast) or csv
+DISPATCH_FORMAT="${DISPATCH_FORMAT:-parquet}"   # parquet (small/fast), csv, or none (summary.json only)
 
 activate_env() {
   eval "$("$CONDA_BASE/bin/conda" shell.bash hook)"

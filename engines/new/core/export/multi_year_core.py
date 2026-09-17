@@ -99,8 +99,14 @@ def _run_meta(
     status: Optional[str] = None,
     solver: Optional[str] = None,
     objective_value: Optional[float] = None,
+    run_info: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Best-effort run provenance for summary.json (never raises on odd configs)."""
+    """Best-effort run provenance for summary.json (never raises on odd configs).
+
+    `run_info` is caller-supplied provenance (solver options, timings, code version,
+    pipeline settings...). It is stored verbatim under meta["run"]; the engine does
+    not interpret it.
+    """
     settings = (data.attrs or {}).get("settings", {}) or {}
     years = [str(y) for y in sets.coords["year"].values.tolist()]
     inv_steps = [str(s) for s in sets.coords["inv_step"].values.tolist()]
@@ -140,6 +146,7 @@ def _run_meta(
         "solver": solver,
         "status": status,
         "objective_value": _json_scalar(safe_float(objective_value)),
+        "run": dict(run_info or {}),
     }
 
 
@@ -192,10 +199,12 @@ def build_summary_metrics(
     }
 
 
-def _write_dispatch(df: pd.DataFrame, out_dir: Path, dispatch_format: str) -> tuple[Path, str]:
+def _write_dispatch(df: pd.DataFrame, out_dir: Path, dispatch_format: str) -> tuple[Optional[Path], str]:
     """Write the trimmed dispatch. Parquet by default (small + fast); fall back to
     CSV if parquet support (pyarrow/fastparquet) is unavailable on the node."""
     fmt = str(dispatch_format or "parquet").lower()
+    if fmt == "none":
+        return None, "none"  # summary.json only (metrics are computed before this)
     if fmt == "parquet":
         try:
             path = out_dir / "dispatch.parquet"
@@ -221,6 +230,7 @@ def export_core_outputs(
     status: Optional[str] = None,
     solver: Optional[str] = None,
     dispatch_format: str = "parquet",
+    run_info: Optional[Dict[str, Any]] = None,
 ) -> dict:
     """Write the lean core bundle (summary.json + dispatch.<fmt>) and return paths.
 
@@ -246,7 +256,8 @@ def export_core_outputs(
         sets=sets, data=data, design_df=design, dispatch_df=dispatch, objective_value=obj
     )
     meta = _run_meta(
-        sets, data, project_name=project_name, status=status, solver=solver, objective_value=obj
+        sets, data, project_name=project_name, status=status, solver=solver,
+        objective_value=obj, run_info=run_info,
     )
 
     summary = {
@@ -262,6 +273,6 @@ def export_core_outputs(
     written["summary_json"] = str(summary_path)
 
     dispatch_path, used_fmt = _write_dispatch(dispatch_core, out_dir, dispatch_format)
-    written["dispatch"] = str(dispatch_path)
+    written["dispatch"] = str(dispatch_path) if dispatch_path is not None else ""
     written["dispatch_format"] = used_fmt
     return written
