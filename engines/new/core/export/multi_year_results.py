@@ -1003,6 +1003,24 @@ def build_discounted_cashflows_table_multi_year(
             sets,
         )
         opex_y_s = opex_y_s + fixed_om_bat_inv_y_s
+    # Main (non-inverter) fixed O&M — mirror objective.py's opex so this cashflows
+    # NPC reconstruction (discounted_objective_contribution) equals the solved
+    # objective. Bases match the objective: grant-free capex x active mask x share.
+    if p.res_fixed_om_share_per_year is not None:
+        opex_y_s = opex_y_s + _as_year_scenario_da(
+            (res_units * res_nom * res_capex * p.res_fixed_om_share_per_year * act_res).sum("inv_step").sum("resource"),
+            sets,
+        )
+    if p.battery_fixed_om_share_per_year is not None:
+        opex_y_s = opex_y_s + _as_year_scenario_da(
+            (bat_inv * p.battery_fixed_om_share_per_year * act_bat).sum("inv_step"),
+            sets,
+        )
+    if p.generator_fixed_om_share_per_year is not None:
+        opex_y_s = opex_y_s + _as_year_scenario_da(
+            (gen_inv * p.generator_fixed_om_share_per_year * act_gen).sum("inv_step"),
+            sets,
+        )
     if p.lost_load_cost_per_kwh is not None:
         ext_y_s = ext_y_s + lost_load.sum("period") * p.lost_load_cost_per_kwh
     if isinstance(fuel_cons, xr.DataArray) and p.fuel_direct_emissions_kgco2e_per_unit_fuel is not None and p.emission_cost_per_kgco2e is not None:
