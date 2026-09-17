@@ -29,7 +29,9 @@ RES+=(-v "SAMPLE_CSV=$SAMPLE_CSV")
 
 # Code version, computed ONCE here and stamped into every summary.json.
 # "-dirty" = uncommitted changes: results would not be reproducible from git.
-CODE_VERSION=$(git --no-optional-locks describe --always --dirty 2>/dev/null || echo unknown)
+# (plain `git describe`: the cluster's git 1.8 has no --no-optional-locks; this runs
+#  once, on the login node, so a short index lock is harmless)
+CODE_VERSION=$(git describe --always --dirty 2>/dev/null || echo unknown)
 RES+=(-v "MGPY2_CODE_VERSION=$CODE_VERSION")
 
 echo "=========================================="
