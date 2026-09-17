@@ -27,3 +27,6 @@ engines/new/projects/*/
 
 # Old workflow copied the country sample to the repo root; use SAMPLE_CSV instead
 /advanced_sample.csv
+
+# thread benchmarks (hpc/benchmark_threads.sh)
+/bench/
