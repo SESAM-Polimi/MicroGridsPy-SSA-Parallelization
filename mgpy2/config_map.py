@@ -71,7 +71,10 @@ class ThesisConfig:
     battery_label: str = "Battery"
     battery_specific_investment_cost_per_kwh: float = 650.0   # 0.65 €/Wh  # THESIS-MAP
     battery_wacc: float = 0.10                                             # THESIS-MAP
-    battery_calendar_lifetime_years: int = 8                  # battery_expected_lifetime
+    # None => derived per cluster from the degradation physics: the year the cohort reaches
+    # end_of_life_soh at that site's cell temperature and cycling intensity. Set a number only
+    # for a contractual/warranty replacement policy that is shorter than the physical life.
+    battery_calendar_lifetime_years: Optional[int] = None
     battery_charge_efficiency: float = 0.9
     battery_discharge_efficiency: float = 0.9
     battery_depth_of_discharge: float = 0.8
@@ -88,15 +91,31 @@ class ThesisConfig:
     battery_max_charge_c_rate: float = 1.0 / 5.0     # THESIS-MAP: 1 / max charge time (5 h)
     battery_max_discharge_c_rate: float = 1.0 / 4.0  # THESIS-MAP: 1 / max discharge time (4 h)
 
-    # Li-ion degradation INPUTS (pre-fitted coefficients; not yet used by the LP).
-    # Defaults: LFP stationary cell, 6000 cycles to 80 % SoH at 80 % DoD (the rated cycle life
-    # the c_k shape was fitted at; NMC reference is 2500).
+    # Li-ion degradation (pre-fitted coefficients, temperature-driven).
+    # Defaults: LFP stationary cell, 6000 cycles to 80 % SoH. NOTE the shipped c(T) shape is
+    # calibrated at FULL DoD (layer1 test_DOD = 1.0), so at DoD 0.8 it delivers ~7370 cycles
+    # rather than 6000; NMC reference is 2500.
     battery_degradation_coefficients: bool = True
     battery_chemistry: str = "LFP"                      # "LFP" | "NMC"
     battery_cycle_lifetime_to_eol_cycles: float = 6000.0
+    # The conditions the rated cycle life above is quoted at. The model is calibrated so that
+    # exactly this many cycles at this DoD and temperature take the cell from initial to
+    # end-of-life SoH. Read them off the datasheet alongside the cycle count.
+    battery_cycle_life_reference_dod: float = 0.8
+    battery_cycle_life_reference_temperature_c: float = 25.0
     battery_end_of_life_soh: float = 0.8
     battery_initial_soh: float = 1.0
-    battery_n_soc_bands: int = 3                        # 1..10; 3 is within 0.1 % of 5 bands
+    # PVGIS gives OUTDOOR air temperature; cells run hotter inside their enclosure. 10 K suits
+    # a ventilated but unconditioned battery room; use ~20 K for a sealed container in full sun
+    # and 0 for active cooling. A design assumption, not a fitted value -- worth a sensitivity.
+    battery_enclosure_temperature_rise_c: float = 10.0
+    # Multiplier on the empirical calendar-fade law. 1.0 = the published Ali et al. (2023) fit
+    # (about 2.1 %/yr at 25 degC cell, mean SoC 0.6); ~0.4 matches the 10-year LFP shelf-ageing
+    # measurement. The literature spread is 2.7x, so report both ends.
+    battery_calendar_fade_scale: float = 1.0
+    # "convex_loss_epigraph" = power-dependent conversion loss (required by the fade LP);
+    # "constant_efficiency" = flat one-way efficiencies (degradation must then be off).
+    battery_loss_model: str = "convex_loss_epigraph"
 
     # --- optional system extensions (NOT required for feasibility) --------------
     # A pure PV+battery, off-grid, zero-lost-load system (the thesis design) is
@@ -170,10 +189,9 @@ def build_formulation_payload(project_name: str, cfg: ThesisConfig, description:
             "emission_cost_per_kgco2e": 0.0,
         },
         "system_configuration": {"n_sources": 1},
-        "battery_model": {"loss_model": "constant_efficiency",
+        "battery_model": {"loss_model": cfg.battery_loss_model,
                           "degradation_model": {"cycle_fade_enabled": False, "calendar_fade_enabled": False,
-                                                "coefficients_enabled": cfg.battery_degradation_coefficients,
-                                                "n_soc_bands": cfg.battery_n_soc_bands}},
+                                                "coefficients_enabled": cfg.battery_degradation_coefficients}},
         "generator_model": {"efficiency_model": "constant_efficiency"},
         "csv_format": {"delimiter": cfg.csv_delimiter, "decimal": cfg.csv_decimal},
     }
@@ -198,7 +216,7 @@ def build_template_settings(cfg: ThesisConfig):
         conversion_labels=[cfg.res_conversion_label],
         resource_labels=[cfg.res_resource_label],
         battery_label=cfg.battery_label,
-        battery_loss_model="constant_efficiency",
+        battery_loss_model=cfg.battery_loss_model,
         battery_cycle_fade_enabled=False,
         battery_calendar_fade_enabled=False,
         battery_efficiency_curve_csv="",
@@ -276,6 +294,10 @@ def _patch_battery_yaml(path: Path, cfg: ThesisConfig) -> None:
         "max_charge_c_rate": cfg.battery_max_charge_c_rate,
         "max_discharge_c_rate": cfg.battery_max_discharge_c_rate,
         "chemistry": cfg.battery_chemistry,
+        "enclosure_temperature_rise_c": cfg.battery_enclosure_temperature_rise_c,
+        "cycle_life_reference_dod": cfg.battery_cycle_life_reference_dod,
+        "cycle_life_reference_temperature_c": cfg.battery_cycle_life_reference_temperature_c,
+        "calendar_fade_scale": cfg.battery_calendar_fade_scale,
         "initial_soh": cfg.battery_initial_soh,
         "end_of_life_soh": cfg.battery_end_of_life_soh,
         "cycle_lifetime_to_eol_cycles": cfg.battery_cycle_lifetime_to_eol_cycles,

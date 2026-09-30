@@ -183,8 +183,12 @@ def initialize_objective(
     gen_active = replacement_active_mask(sets)
 
     ann_res_y = ((res_annuity + res_inv_ac_annuity) * res_active).sum("inv_step").sum("resource")
-    ann_bat_y = ((bat_annuity + bat_inv_power_annuity) * bat_active).sum("inv_step")
     ann_gen_y = (gen_annuity * gen_active).sum("inv_step")
+    # Battery energy CAPEX is amortised over the calendar lifetime only. Cycle ageing is
+    # NOT charged here: it is already paid for through the effective-capacity state (fade
+    # consumes usable kWh) and the end-of-life floor (which forces replacement-grade
+    # sizing). Charging it again as a wear cost would double-count the same physics.
+    ann_bat_y = ((bat_annuity + bat_inv_power_annuity) * bat_active).sum("inv_step")
     annuity_y = ann_res_y + ann_bat_y + ann_gen_y  # (year,)
 
     # ------------------------------------------------------------------

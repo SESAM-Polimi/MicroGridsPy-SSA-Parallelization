@@ -123,25 +123,145 @@ Every result records the mode it used: `summary.json` → `meta.run.pipeline_con
   were infeasible, so no August result is affected.)
 - PVGIS updates its database over time, so re-downloading later may not give identical inputs.
 
-### 4b. Battery-degradation inputs (Li-ion, inputs only)
+### 4b. Battery degradation (Li-ion, temperature-driven)
 
 `inputs/battery.yaml` carries `chemistry` (LFP | NMC), `initial_soh`, `end_of_life_soh`,
 `cycle_lifetime_to_eol_cycles`; `formulation.json` → `battery_model.degradation_model` carries
-`coefficients_enabled` and `n_soc_bands` (1..10). When enabled, the engine
+`coefficients_enabled`. When enabled, the engine
 (`data_pipeline/battery_degradation_coefficients.py`, pre-fitted `layer1_liion_coefficients.json`)
 builds, from `ambient_temperature`:
 
-- `Params.battery_ck_bands` (soc_band × period × year × scenario): cycle-fade marginal cost of each
-  usable-SOC band, fraction of nameplate lost per unit depth-fraction. The usable range
-  `[0, DoD]` is split into `n_soc_bands` equal bands (band 0 = shallowest). Shape is fixed; it is
-  scaled by `N_ref / cycle_lifetime_to_eol_cycles` (N_ref: LFP 6000, NMC 2500) and varies with T.
-  Non-decreasing with depth (convex), so the LP will fill cheap bands first without binaries.
-- `Params.battery_calendar_rate_per_year` (year): calendar fade from the annual-mean T.
+- `Params.battery_cycle_fade_coefficient` (period × year × scenario): marginal cycle-fade cost
+  `c(T) = Psi(DoD, T) / DoD`, fraction of nameplate lost per unit depth-fraction, so `c` times kWh
+  of DC discharge gives kWh of capacity lost. Varies with T by 4.3x over 10-45 degC. Depth is not
+  resolved: the reference `Psi(D)` is within 1.7 % of linear in `D` and flat past `D = 0.5`, so
+  per-band LP states changed the optimum by 0.007 % and were dropped.
 
-Defaults: LFP, 6000 cycles to 80 % SoH, initial SoH 1.0, DoD 0.8, 3 bands. Three bands match the
-10-band reference curve to 0.1 % of full-DoD fade (same as 5 bands); 1 band is within 0.4 %.
-These arrays are **not used by the LP yet** (identical variables/constraints with the flag on or off).
-Missing `ambient_temperature.csv` or an unknown chemistry with the flag on raises `InputValidationError`.
+  **Magnitude** is pinned to the datasheet cycle life by solving
+  `N_rated * Psi(cycle_life_reference_dod, cycle_life_reference_temperature_c) = initial_soh -
+  end_of_life_soh`, so the rated cycle count is delivered exactly at the conditions it was quoted
+  at. The shipped `Psi` shape was fitted at FULL DoD and 25 degC (layer1 meta: `test_DOD` 1.0,
+  `test_T_C` 25, `N_cycles` 6000 to 80 % SoH), so upstream's `N_ref / N_user` scaling silently
+  returned ~7370 cycles when a user asked for 6000 at 80 % DoD -- a 23 % error in the fade budget.
+  Set both reference fields from the same datasheet line as the cycle count.
+- `Params.battery_calendar_rate_per_year` (year): calendar fade from the annual-mean cell
+  temperature and the mean SoC. Empirical law (Ali et al. 2023, Front. Energy Res. 11:1108269,
+  Table 3): `Q_cal = a1 exp(a2 SoC) b1 exp(b2/T) t^c1`, t in days, T in kelvin. `b2 = -Ea/R`, so LFP
+  implies Ea = 29.0 kJ/mol and one fade doubling per 17.6 degC. Mean SoC is taken as `1 - DoD/2`, the
+  time-average of a cycle over the usable window. About 0.46-2.11 %/yr over 10-50 degC, 0.85 %/yr at
+  25 degC.
+
+**Magnitude anchor.** The Ali fit is a cross-study extrapolation from short tests (120-885 days) and
+over-predicts long-duration loss: 8.2 % against the 2-4 % measured on LFP/C cells stored ten years at
+6 degC / 50 % SoC (J. Power Sources 2025, S0378775325016155). The code therefore keeps the fit's
+SHAPE and renormalises its MAGNITUDE onto that measurement (factor 0.367) -- the same
+shape-from-fit / magnitude-from-measurement split the cycle coefficients use with the rated cycle
+life. `battery.technical.calendar_fade_scale` moves along the literature band: 1.0 is the anchored
+model, ~2.7 recovers the unscaled Ali envelope. The band is 2.7x wide, so report both ends.
+
+**This replaces** the upstream per-hour cubic, which gave 0.05 %/yr at 25 degC -- a 386-year calendar
+life, 1-2 orders of magnitude below every measured LFP storage dataset, and low enough that calendar
+ageing had no effect on any result.
+
+**Cell vs ambient temperature.** PVGIS reports outdoor air temperature, but the cells sit in an
+enclosure that runs hotter. `battery.technical.enclosure_temperature_rise_c` (default 10 K) is added
+to the ambient series before BOTH coefficients are evaluated: 10 K suits a ventilated but
+unconditioned battery room, ~20 K a sealed container in full sun, 0 active cooling. This is a design
+assumption, not a fitted value -- run it as a sensitivity. It is not double counted: the layer-I
+cycle fit's own self-heating and pack offset are defined relative to the air around the pack, which
+is what this rise produces.
+
+Both fade terms enter the LP additively in the effective-capacity state (§4c). Defaults: LFP, 6000
+cycles to 80 % SoH, initial SoH 1.0, DoD 0.8, +10 K enclosure, calendar scale 1.0.
+Missing `ambient_temperature.csv` or an unknown chemistry with the flag on raises
+`InputValidationError`. So does a calendar lifetime long enough that calendar fade alone would
+exhaust `initial_soh - end_of_life_soh`: that combination is LP-infeasible and oversizing cannot
+relieve it, because both the fade and the end-of-life floor scale with nameplate energy, so the
+error names the longest consistent lifetime for the site instead.
+
+### 4c. Lifetime formulation in the multi-year LP
+
+With `coefficients_enabled`, `battery_effective_energy_capacity` (year × scenario × inv_step) is the
+usable energy state in kWh and the two ageing mechanisms add into it:
+
+```
+cycle_fade_y    = sum_t c(T_t) * battery_discharge_dc[t, y]       (kWh)
+calendar_fade_y = r_cal(T_bar_y) * nameplate_energy               (kWh)
+eff_cap_y       = eff_cap_{y-1} - cycle_fade_{y-1} - calendar_fade_{y-1}
+eff_cap_y       = SoH0 * nameplate_energy                         (at each commissioning year)
+eff_cap_y      >= SoH_eol * nameplate_energy                      (end-of-life floor)
+```
+
+The SOC window tracks `eff_cap`, so fade removes usable storage. The end-of-life floor caps a
+cohort's cumulative fade at `(SoH0 - SoH_eol) * nameplate`, which is what makes
+`cycle_lifetime_to_eol_cycles` binding rather than advisory, and is the channel through which a hot
+cluster forces a larger battery. The availability ceiling deliberately carries **no** exogenous
+degradation rate in this mode: calendar fade is already in the state, and applying `r_cal` to both
+would count it twice.
+
+Battery energy CAPEX is annuitised over `calendar_lifetime_years` only. Cycle ageing carries no
+separate wear charge: it is paid through lost usable capacity and the end-of-life floor, so charging
+it again would double-count the same physics.
+
+### 4d. Where `calendar_lifetime_years` comes from
+
+That one field does three jobs: it decides when a replacement cohort is commissioned, it sets the
+amortisation rate `CRF(wacc, L)`, and it is the horizon the sub-linear calendar law is linearised
+over. Nothing in the LP ties it to `end_of_life_soh`, so on its own it is free to contradict the
+physics -- and before the calendar recalibration it did, retiring cells at SoH 0.94.
+
+**Leave `battery.investment.by_step.*.calendar_lifetime_years: null` and it is derived per cluster**
+as the year the cohort actually reaches end-of-life SoH, by solving
+
+```
+calendar_fade(T_cell, SoC, L) + L x cycle_fade_per_year = initial_soh - end_of_life_soh
+```
+
+for `L` (bisection; the left side is strictly increasing so the root is unique), then flooring to a
+whole year because the replacement masks step in integers. Flooring keeps the cohort inside its
+budget, so a derived life can never trip the §4b calendar guard.
+
+Cycling intensity is the one term that is a dispatch decision rather than an input, so it is
+estimated before the solve: an off-grid battery sized to carry the design night is discharged every
+night, hence
+
+```
+equivalent full cycles per year = (annual dark-hour load) x end_of_life_soh / (95th-percentile night)
+```
+
+The absolute sizing cancels, which is what makes this computable without the LP. The
+`end_of_life_soh` factor accounts for the battery having to carry that night while degraded, which is
+the condition a planner sizes for; omitting it understates the nameplate and so overstates cycling by
+about `1/SoH_eol`. `c(T)` is then averaged with the dark-hour load as weights rather than flat over
+the year, because discharge happens in the cool hours.
+
+Validated against a solved LP on the BDI cluster, which the estimator never sees: 271 cycles/yr
+against ~265 realised, cycle fade 1.427 against 1.394 %/yr, implied life **7.32 y against 7.57 y
+realised (3.3 %)**. Across sites it gives 9.6 y at a 30 degC cell, 7.3 y at 35, 4.2 y at 45 and
+3.2 y at 50.
+
+Every assumption behind a derived value is written into
+`settings.battery_model.degradation_model` (`calendar_lifetime_mode`,
+`calendar_lifetime_years_derived`, `calendar_lifetime_years_used`,
+`assumed_equivalent_full_cycles_per_year`, `assumed_cycle_fade_per_year`,
+`discharge_weighted_cycle_fade_coefficient`, `mean_cell_temperature_c`) so each cluster's assumed
+life is reportable.
+
+**Set a number instead** when the replacement date is contractual rather than physical -- a warranty
+term, an O&M contract, a financing tenor. That is a legitimately different quantity from the service
+life, and the model cannot currently represent both at once: one field sets both the replacement date
+and the amortisation period.
+
+**Diagnostic.** Whichever route you take, check SoH in the year before a replacement. Close to
+`end_of_life_soh` means the interval matches the physics. Far above it means the interval is too
+short and you are scrapping healthy cells. The guard catches the other direction.
+
+**Sensitivity.** The derived life inherits `enclosure_temperature_rise_c`, which dominates it: at a
+25 degC ambient site the derived life is 12.7 y at +0 K, 7.5 y at +10 K and 4.3 y at +20 K. The
+cycling estimate is comparatively well determined (about 3 %) because it comes from the actual load
+profile. So deriving the life does not remove that uncertainty, it propagates it into the
+replacement schedule and therefore into cost -- which is more honest than hiding it behind a fixed
+number, but it makes the enclosure assumption the headline sensitivity of any study.
 
 ---
 

@@ -14,7 +14,7 @@ class Params:
     load_demand: Optional[xr.DataArray]
     resource_availability: Optional[xr.DataArray]
     ambient_temperature: Optional[xr.DataArray]
-    battery_ck_bands: Optional[xr.DataArray]
+    battery_cycle_fade_coefficient: Optional[xr.DataArray]
     battery_calendar_rate_per_year: Optional[xr.DataArray]
     scenario_weight: Optional[xr.DataArray]
 
@@ -125,7 +125,7 @@ def get_params(ds: xr.Dataset) -> Params:
         load_demand=_opt("load_demand"),
         resource_availability=_opt("resource_availability"),
         ambient_temperature=_opt("ambient_temperature"),
-        battery_ck_bands=_opt("battery_ck_bands"),
+        battery_cycle_fade_coefficient=_opt("battery_cycle_fade_coefficient"),
         battery_calendar_rate_per_year=_opt("battery_calendar_rate_per_year"),
         scenario_weight=_opt("scenario_weight"),
         min_renewable_penetration=_opt("min_renewable_penetration"),

@@ -168,11 +168,38 @@ def initialize_constraints(
     degradation_settings = (battery_model_settings.get("degradation_model", {}) or {})
     cycle_fade_enabled = bool(degradation_settings.get("cycle_fade_enabled", False))
     calendar_fade_enabled = bool(degradation_settings.get("calendar_fade_enabled", False))
-    degradation_state_enabled = cycle_fade_enabled or calendar_fade_enabled
-    battery_capacity_degradation_rate, _ = suppress_exogenous_battery_capacity_degradation_when_endogenous(
-        p.battery_capacity_degradation_rate_per_year,
-        calendar_fade_enabled=calendar_fade_enabled,
+    coefficients_enabled = bool(degradation_settings.get("coefficients_enabled", False))
+    if coefficients_enabled and (cycle_fade_enabled or calendar_fade_enabled):
+        raise InputValidationError(
+            "battery degradation coefficients cannot be combined with the legacy "
+            "cycle_fade_enabled/calendar_fade_enabled formulation."
+        )
+    degradation_state_enabled = cycle_fade_enabled or calendar_fade_enabled or coefficients_enabled
+    cycle_fade_coeff_t = data.get("battery_cycle_fade_coefficient") if coefficients_enabled else None
+    calendar_rate_y = data.get("battery_calendar_rate_per_year") if coefficients_enabled else None
+    if coefficients_enabled:
+        if cycle_fade_coeff_t is None or calendar_rate_y is None:
+            raise InputValidationError(
+                "battery degradation coefficients are enabled but 'battery_cycle_fade_coefficient' / "
+                "'battery_calendar_rate_per_year' are missing from the dataset."
+            )
+        # Calendar ageing is carried additively in the effective-capacity state, so the
+        # availability ceiling must stay undegraded: also applying r_cal here would
+        # count calendar fade twice.
+        battery_capacity_degradation_rate = None
+    else:
+        battery_capacity_degradation_rate, _ = suppress_exogenous_battery_capacity_degradation_when_endogenous(
+            p.battery_capacity_degradation_rate_per_year,
+            calendar_fade_enabled=calendar_fade_enabled,
+        )
+    # Exact equality on the effective-capacity year link is only valid when the
+    # availability ceiling does not decline inside a cohort's life.
+    _rate_vals = (
+        np.asarray(xr.DataArray(battery_capacity_degradation_rate).values, dtype=float).reshape(-1)
+        if battery_capacity_degradation_rate is not None
+        else np.zeros(0)
     )
+    exogenous_fade_active = bool(_rate_vals.size and np.nanmax(np.abs(_rate_vals)) > 0.0)
     if degradation_state_enabled and battery_loss_model != CONVEX_LOSS_EPIGRAPH:
         raise InputValidationError(
             "Battery degradation tracking requires battery_model.loss_model='convex_loss_epigraph'."
@@ -204,6 +231,10 @@ def initialize_constraints(
     soh0 = _require_da("battery_initial_soh", p.battery_initial_soh) if degradation_state_enabled else p.battery_initial_soh
     soc0_scalar = float(soc0.item()) if getattr(soc0, "dims", ()) == () else soc0
     soh0_scalar = float(soh0.item()) if (degradation_state_enabled and getattr(soh0, "dims", ()) == ()) else soh0
+    soh_eol_scalar = None
+    if coefficients_enabled:
+        _soh_eol = _require_da("battery_end_of_life_soh", p.battery_end_of_life_soh)
+        soh_eol_scalar = float(_soh_eol.item()) if getattr(_soh_eol, "dims", ()) == () else _soh_eol
     dod = _require_da("battery_depth_of_discharge", p.battery_depth_of_discharge)
     bat_max_charge_c_rate = p.battery_max_charge_c_rate
     bat_max_discharge_c_rate = p.battery_max_discharge_c_rate
@@ -428,7 +459,9 @@ def initialize_constraints(
         )
 
         if degradation_state_enabled:
-            if bat_cycle_fade is None or bat_avg_soc is None or bat_calendar_fade is None or bat_eff_cap is None:
+            if bat_cycle_fade is None or bat_eff_cap is None or bat_calendar_fade is None or (
+                not coefficients_enabled and bat_avg_soc is None
+            ):
                 raise InputValidationError(
                     "Battery degradation mode is active, but battery_cycle_fade/battery_average_soc/battery_calendar_fade/"
                     "battery_effective_energy_capacity variables are missing."
@@ -446,7 +479,14 @@ def initialize_constraints(
             # throughput [kWh] uses dt = 1 h implicitly. The cycle-fade
             # coefficient is interpreted here as usable-capacity fade per kWh of
             # DC throughput in this linear multi-year surrogate.
-            if cycle_fade_enabled:
+            if coefficients_enabled:
+                # Annual cycle fade [kWh] = sum_t c(T_t) * DC discharge in hour t, with
+                # c(T) from the hourly ambient temperature of this cluster.
+                model.add_constraints(
+                    bat_cycle_fade == (cycle_fade_coeff_t * bat_dis_dc).sum("period"),
+                    name="battery_cycle_fade_definition",
+                )
+            elif cycle_fade_enabled:
                 throughput = 0.5 * (bat_ch_dc + bat_dis_dc)
                 model.add_constraints(
                     bat_cycle_fade == cycle_fade_coeff * throughput,
@@ -458,7 +498,15 @@ def initialize_constraints(
                     name="battery_cycle_fade_definition",
                 )
 
-            if calendar_fade_enabled:
+            if coefficients_enabled:
+                # Annual calendar fade [kWh] = r_cal(T_bar_y) * cohort nameplate energy.
+                # bat_cap_available carries no exogenous degradation in this mode, so it
+                # is the undegraded nameplate energy of the cohort while it is active.
+                model.add_constraints(
+                    bat_calendar_fade == calendar_rate_y * bat_cap_available,
+                    name="battery_calendar_fade_definition",
+                )
+            elif calendar_fade_enabled:
                 required_calendar_vars = (
                     "battery_calendar_fade_slope",
                     "battery_calendar_fade_intercept",
@@ -506,6 +554,14 @@ def initialize_constraints(
                 bat_eff_cap.sel(year=first_year) == soh0_scalar * bat_cap_available.sel(year=first_year),
                 name="battery_effective_energy_capacity_initial",
             )
+            if coefficients_enabled:
+                # A cohort must still hold its end-of-life SoH in every year it operates.
+                # This is what makes the rated lifetime binding rather than advisory, and
+                # it is the channel through which ambient temperature reaches the sizing.
+                model.add_constraints(
+                    bat_eff_cap >= soh_eol_scalar * bat_cap_available,
+                    name="battery_effective_energy_capacity_end_of_life",
+                )
             model.add_constraints(
                 soc.sel(year=first_year).isel(period=0) == soc0_scalar * bat_eff_cap.sel(year=first_year),
                 name="soc_initial",
@@ -515,9 +571,12 @@ def initialize_constraints(
                 cur_year = year_values[idx]
                 commission_cur = bat_commission_year.sel(year=cur_year)
                 commission_cur_state = commission_cur.expand_dims(scenario=sets.coords["scenario"])
+                prev_cycle_fade = bat_cycle_fade.sel(year=prev_year)
+                if "period" in prev_cycle_fade.dims:
+                    prev_cycle_fade = prev_cycle_fade.sum("period")
                 continued_eff_cap = (
                     bat_eff_cap.sel(year=prev_year)
-                    - bat_cycle_fade.sel(year=prev_year).sum("period")
+                    - prev_cycle_fade
                     - bat_calendar_fade.sel(year=prev_year).expand_dims(scenario=sets.coords["scenario"])
                 )
                 reset_eff_cap = soh0_scalar * bat_cap_available.sel(year=cur_year)
@@ -533,11 +592,17 @@ def initialize_constraints(
                 #   min(continued_eff_cap, bat_cap_available)
                 # while still resetting to the commissioned value in replacement
                 # years.
-                model.add_constraints(
-                    bat_eff_cap.sel(year=cur_year)
-                    <= target_eff_cap,
-                    name=f"battery_effective_energy_capacity_year_link_{cur_year}",
-                )
+                if coefficients_enabled and not exogenous_fade_active:
+                    model.add_constraints(
+                        bat_eff_cap.sel(year=cur_year) == target_eff_cap,
+                        name=f"battery_effective_energy_capacity_year_link_{cur_year}",
+                    )
+                else:
+                    model.add_constraints(
+                        bat_eff_cap.sel(year=cur_year)
+                        <= target_eff_cap,
+                        name=f"battery_effective_energy_capacity_year_link_{cur_year}",
+                    )
                 reset_soc = soc0_scalar * bat_eff_cap.sel(year=cur_year)
                 continued_soc = (
                     soc.sel(year=prev_year).isel(period=T - 1)

@@ -864,6 +864,10 @@ def _write_battery_yaml(path: Path, settings: TemplateSettings, overwrite: bool 
             "max_discharge_c_rate": None,                     # optional upper bound on inverter power / energy
             "max_charge_c_rate": None,                        # optional upper bound on inverter power / energy
             "max_installable_capacity_kwh": max_installable_capacity_kwh,  # optional total battery capacity upper bound
+            "enclosure_temperature_rise_c": 10.0,              # K above OUTDOOR ambient inside the battery enclosure
+            "calendar_fade_scale": 1.0,                        # sensitivity multiplier on the empirical calendar-fade law
+            "cycle_life_reference_dod": 0.8,                   # DoD at which cycle_lifetime_to_eol_cycles is quoted
+            "cycle_life_reference_temperature_c": 25.0,        # temperature at which it is quoted
             "efficiency_curve_csv": (
                 _safe_battery_efficiency_curve_csv(settings)
                 if _safe_battery_loss_model(settings) == "convex_loss_epigraph"

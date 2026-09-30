@@ -68,7 +68,13 @@ def initialize_vars(sets: xr.Dataset, data: xr.Dataset, model: lp.Model) -> Dict
     degradation_settings = (battery_model_settings.get("degradation_model", {}) or {})
     cycle_fade_enabled = bool(degradation_settings.get("cycle_fade_enabled", False))
     calendar_fade_enabled = bool(degradation_settings.get("calendar_fade_enabled", False))
-    degradation_state_enabled = cycle_fade_enabled or calendar_fade_enabled
+    coefficients_enabled = bool(degradation_settings.get("coefficients_enabled", False))
+    if coefficients_enabled and (cycle_fade_enabled or calendar_fade_enabled):
+        raise InputValidationError(
+            "battery degradation coefficients cannot be combined with the legacy "
+            "cycle_fade_enabled/calendar_fade_enabled formulation."
+        )
+    degradation_state_enabled = cycle_fade_enabled or calendar_fade_enabled or coefficients_enabled
     # In the current multi-year formulation this flag controls integer sizing
     # of investment-unit variables only; it is not chronological unit commitment.
     is_integer = bool(p.settings.get("unit_commitment", False))
@@ -186,7 +192,24 @@ def initialize_vars(sets: xr.Dataset, data: xr.Dataset, model: lp.Model) -> Dict
             coords={"period": period, "year": year, "scenario": scenario, "inv_step": inv_step},
             name="battery_discharge_loss",
         )
-        if degradation_state_enabled:
+        if coefficients_enabled:
+            ysk = ("year", "scenario", "inv_step")
+            ysk_coords = {"year": year, "scenario": scenario, "inv_step": inv_step}
+            # Annual capacity lost per cohort [kWh]. Cycle fade is sum_t c(T_t) * DC
+            # discharge; calendar fade is r_cal(T_bar_y) * nameplate. The two add.
+            vars["battery_cycle_fade"] = model.add_variables(
+                lower=0.0, dims=ysk, coords=ysk_coords, name="battery_cycle_fade"
+            )
+            vars["battery_calendar_fade"] = model.add_variables(
+                lower=0.0,
+                dims=("year", "inv_step"),
+                coords={"year": year, "inv_step": inv_step},
+                name="battery_calendar_fade",
+            )
+            vars["battery_effective_energy_capacity"] = model.add_variables(
+                lower=0.0, dims=ysk, coords=ysk_coords, name="battery_effective_energy_capacity"
+            )
+        elif degradation_state_enabled:
             vars["battery_cycle_fade"] = model.add_variables(
                 lower=0.0,
                 dims=("period", "year", "scenario", "inv_step"),

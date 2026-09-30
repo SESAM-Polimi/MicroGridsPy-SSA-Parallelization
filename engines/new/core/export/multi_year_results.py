@@ -330,7 +330,7 @@ def build_dispatch_timeseries_table_multi_year(
     raw_bcycle = get_var_solution(vars_dict=vars, solution=solution, name="battery_cycle_fade")
     raw_bcal = get_var_solution(vars_dict=vars, solution=solution, name="battery_calendar_fade")
     raw_beff = get_var_solution(vars_dict=vars, solution=solution, name="battery_effective_energy_capacity")
-    bcycle = _sum_if_has_inv_step(raw_bcycle)
+    bcycle = _broadcast_year_state_to_period(_sum_if_has_inv_step(raw_bcycle), sets)
     bcal = _broadcast_year_state_to_period(_sum_if_has_inv_step(raw_bcal), sets)
     beff = _broadcast_year_state_to_period(_sum_if_has_inv_step(raw_beff), sets)
     _, bat_inv_active = _battery_capacity_tables(sets=sets, data=data, vars=vars, solution=solution)

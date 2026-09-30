@@ -21,13 +21,26 @@ is compute-only; all post-processing and visualization happen offline.
   (`_load_ambient_temperature_csv` in `multi_year_model/data.py`), exposed as
   `Params.ambient_temperature` (period, year, scenario), transposed in
   `data_pipeline/multi_year_loader._align_contract_dims`.
-- **Added battery-degradation coefficient inputs** (Li-ion only, no LP use yet):
+- **Added temperature-driven battery degradation** (Li-ion only):
   `data_pipeline/battery_degradation_coefficients.py` + `layer1_liion_coefficients.json` (copied
-  verbatim from upstream MicroGridsPy `b76a32d`; calendar alpha polynomials are the ones hard-coded in
-  upstream's `.py`, not the JSON's own `alpha_poly`). New `Params.battery_ck_bands`,
-  `battery_calendar_rate_per_year`, `battery_end_of_life_soh`, `battery_cycle_lifetime_to_eol_cycles`;
-  new `degradation_model.coefficients_enabled` / `n_soc_bands` (independent of the older flat
-  `cycle_fade_enabled` scheme).
+  verbatim from upstream MicroGridsPy `b76a32d`, and used for the CYCLE-fade shape only). New
+  `Params.battery_cycle_fade_coefficient`, `battery_calendar_rate_per_year`, `battery_end_of_life_soh`,
+  `battery_cycle_lifetime_to_eol_cycles`; new `degradation_model.coefficients_enabled` (independent of
+  the older flat `cycle_fade_enabled` scheme).
+- **Diverged from upstream on the lifetime formulation.** Upstream resolves cycle fade over
+  `n_soc_bands` SOC bands and charges it through a `battery_replacement_cost` epigraph
+  `Z >= max(calendar annuity, c_repl * phi * F_cyc)`, with calendar fade entering only as a declining
+  availability ceiling. Here: no bands (the depth non-linearity is 1.7 % and cost +1.6M LP variables),
+  no epigraph (its cycle branch never binds at SSA temperatures and realistic cycling, so the wear
+  charge was identically zero), calendar and cycle fade add in the capacity state instead of taking a
+  min, and a new `battery_effective_energy_capacity_end_of_life` floor makes the rated cycle life
+  binding. See `docs/PIPELINE.md` §4c.
+- **Replaced upstream's calendar-ageing coefficients.** Upstream evaluates a hard-coded per-hour
+  cubic in ambient temperature (which also disagrees by about 6x with the `alpha_poly` in its own
+  JSON) giving 0.05 %/yr at 25 degC, i.e. a 386-year calendar life. Here calendar fade uses the
+  empirical Ali et al. (2023) storage fit, renormalised onto a measured 10-year LFP shelf test, and
+  is evaluated at cell temperature (ambient + a new `enclosure_temperature_rise_c`) against a mean
+  SoC of `1 - DoD/2` rather than a step on DoD. See `docs/PIPELINE.md` §4b.
 - **Removed the Streamlit GUI** (not needed on the cluster; offline analysis uses
   `mgpy2.reporting`):
   - `Home.py`, `pages/`, `assets/`

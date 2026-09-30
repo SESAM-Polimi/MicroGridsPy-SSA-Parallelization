@@ -136,12 +136,6 @@ def get_battery_degradation_settings(
         calendar_time_increment_mode = "constant_per_year"
 
     coefficients_enabled = _coerce_bool(degradation_model.get("coefficients_enabled", False), default=False)
-    try:
-        n_soc_bands = int(degradation_model.get("n_soc_bands", 3) or 3)
-    except Exception as exc:
-        raise InputValidationError("battery_model.degradation_model.n_soc_bands must be an integer.") from exc
-    if not (1 <= n_soc_bands <= 10):
-        raise InputValidationError("battery_model.degradation_model.n_soc_bands must be within [1, 10].")
     if coefficients_enabled and formulation_mode != "dynamic":
         raise InputValidationError(
             "battery_model.degradation_model.coefficients_enabled is supported only in the dynamic "
@@ -246,7 +240,6 @@ def get_battery_degradation_settings(
         "cycle_lifetime_to_eol_cycles": cycle_lifetime_to_eol_cycles,
         "endogenous_degradation_enabled": bool(cycle_fade_enabled or calendar_fade_enabled),
         "coefficients_enabled": coefficients_enabled,
-        "n_soc_bands": n_soc_bands,
     }
 
 

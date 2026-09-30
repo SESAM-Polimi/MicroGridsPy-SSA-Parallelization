@@ -1,6 +1,7 @@
 # generation_planning/modeling/data.py
 from __future__ import annotations
 
+import math
 from functools import partial
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple
@@ -23,8 +24,10 @@ from core.data_pipeline.battery_degradation_model import (
 )
 from core.data_pipeline.battery_degradation_coefficients import (
     InputValidationError as BatteryCoefficientsInputValidationError,
+    CALENDAR_FADE_SOURCES,
     calendar_rate_per_year,
-    evaluate_band_marginals,
+    implied_calendar_life,
+    cycle_fade_coefficient,
     normalize_chemistry,
 )
 from core.data_pipeline.battery_calendar_fade_model import (
@@ -918,6 +921,9 @@ def _load_battery_yaml(
         "inverter_fixed_om_share_per_year",
     ]
     OPTIONAL_INVESTMENT_BY_STEP = {
+        # null/absent means "derive it from the degradation physics" (see
+        # _estimate_equivalent_full_cycles_per_year and implied_calendar_life).
+        "calendar_lifetime_years": np.nan,
         "inverter_specific_investment_cost_per_kw": 0.0,
         "fixed_om_share_per_year": 0.0,
         "inverter_fixed_om_share_per_year": 0.0,
@@ -938,6 +944,10 @@ def _load_battery_yaml(
         "capacity_degradation_rate_per_year": 0.0,
     }
     CONDITIONAL_TECHNICAL_DEFAULTS = {
+        "enclosure_temperature_rise_c": 10.0,
+        "calendar_fade_scale": 1.0,
+        "cycle_life_reference_dod": 0.8,
+        "cycle_life_reference_temperature_c": 25.0,
         "initial_soh": 1.0,
         "end_of_life_soh": np.nan,
         "cycle_lifetime_to_eol_cycles": np.nan,
@@ -979,14 +989,17 @@ def _load_battery_yaml(
             raise InputValidationError(f"{path.name}: battery.investment.by_step['{st}'] must be a dict.")
         si = step_to_idx[st]
         for k in INVESTMENT_BY_STEP:
-            if k not in blk:
+            raw = blk.get(k, None)
+            # An explicit null on an optional key means "use the default", which for
+            # calendar_lifetime_years is NaN, i.e. derive it from the degradation physics.
+            if k not in blk or (raw is None and k in OPTIONAL_INVESTMENT_BY_STEP):
                 if k in OPTIONAL_INVESTMENT_BY_STEP:
                     inv_arr[k][si] = float(OPTIONAL_INVESTMENT_BY_STEP[k])
                     continue
                 raise InputValidationError(
                     f"{path.name}: missing investment param '{k}' in battery.investment.by_step['{st}']."
                 )
-            inv_arr[k][si] = _as_float(blk.get(k), name=f"battery/investment/{st}/{k}", default=0.0)
+            inv_arr[k][si] = _as_float(raw, name=f"battery/investment/{st}/{k}", default=0.0)
 
     tech_block = bat.get("technical", None)
     if not isinstance(tech_block, dict):
@@ -1721,6 +1734,40 @@ def regenerate_grid_availability_dynamic(*, project_name: str, sets: xr.Dataset)
 # -----------------------------------------------------------------------------
 # main entrypoint (DYNAMIC)
 # -----------------------------------------------------------------------------
+def _estimate_equivalent_full_cycles_per_year(
+    *,
+    load_demand: xr.DataArray,
+    resource_availability: xr.DataArray,
+    end_of_life_soh: float,
+) -> tuple[float, xr.DataArray]:
+    """Cycles per year an off-grid battery sized for the design night will actually see.
+
+    A battery sized to carry the design night is discharged every night, so the equivalent
+    full cycles per year is (annual dark-hour load) / (design night) and the absolute sizing
+    cancels out -- which is what makes this estimable before the LP runs. The end_of_life_soh
+    factor accounts for the battery having to carry that same night while degraded to its
+    end-of-life state, which is the condition a planner actually sizes for; leaving it out
+    underestimates the nameplate and so overestimates the cycling by about 1/SoH_eol.
+
+    Returns the cycles per year and the dark-hour load profile, which the caller uses to
+    weight the temperature-dependent fade coefficient towards the hours discharge happens in.
+    """
+    dark = (resource_availability.sum("resource") <= 1e-9)
+    dark_load = (load_demand * dark).isel(year=0)
+    if "scenario" in dark_load.dims:
+        dark_load = dark_load.mean("scenario")
+    values = np.asarray(dark_load.values, dtype=float)
+    annual = float(values.sum())
+    fallback = 365.0 * float(end_of_life_soh)
+    if annual <= 0.0 or values.size % 24 != 0:
+        return fallback, dark_load
+    daily = values.reshape(-1, 24).sum(axis=1)
+    design_night = float(np.percentile(daily, 95.0))
+    if design_night <= 0.0:
+        return fallback, dark_load
+    return annual * float(end_of_life_soh) / design_night, dark_load
+
+
 def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
     """
     Legacy dynamic loader implementation kept for shared pipeline delegation.
@@ -1970,10 +2017,11 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
         else battery_degradation_settings.get("battery_calendar_time_increment_per_year", 1.0)
     )
     # ------------------------------------------------------------------
-    # Pre-fitted Li-ion degradation coefficients (inputs only; not yet used by the LP).
-    #   battery_ck_bands              (soc_band, period, year, scenario)  fraction/depth-fraction
-    #   battery_calendar_rate_per_year (year)                             fraction of nameplate/yr
+    # Pre-fitted Li-ion degradation coefficients (exogenous to the LP).
+    #   battery_cycle_fade_coefficient (period, year, scenario)  fraction/depth-fraction
+    #   battery_calendar_rate_per_year (year)                    fraction of nameplate/yr
     # Shape is fixed for every cluster; only the PVGIS ambient temperature differs.
+    # Both are evaluated at CELL temperature = outdoor ambient + enclosure rise.
     # ------------------------------------------------------------------
     if battery_degradation_settings.get("coefficients_enabled", False):
         if ambient_temperature is None:
@@ -1986,27 +2034,135 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
             chemistry = normalize_chemistry(bat_params_ds.attrs.get("battery_chemistry", None))
             dod_value = float(bat_params_ds["battery_depth_of_discharge"].item())
             user_cycle_life = battery_degradation_settings.get("cycle_lifetime_to_eol_cycles", None)
-            n_bands = int(battery_degradation_settings["n_soc_bands"])
-            band_res = evaluate_band_marginals(
+            enclosure_rise = float(bat_params_ds["battery_enclosure_temperature_rise_c"].item())
+            calendar_scale = float(bat_params_ds["battery_calendar_fade_scale"].item())
+            _cal_years_in = np.asarray(
+                bat_params_ds["battery_calendar_lifetime_years"].values, dtype=float
+            )
+            calendar_life_is_derived = not bool(np.isfinite(_cal_years_in).all())
+            calendar_ref_years = (
+                float(np.nanmax(_cal_years_in)) if not calendar_life_is_derived else float("nan")
+            )
+            # PVGIS reports outdoor air temperature. The cells sit inside an enclosure that
+            # runs hotter, and the layer-I cycle fit is defined on the air temperature around
+            # the pack (its own self-heating and pack offset are already inside the cubic), so
+            # this rise is additional rather than double counted.
+            cell_temperature = ambient_temperature + enclosure_rise
+            # Time-average SoC of a battery cycling over the usable window [1 - DoD, 1].
+            mean_soc = 1.0 - 0.5 * dod_value
+            # The datasheet cycle life is quoted at its own DoD and temperature, so the
+            # magnitude is pinned there: N_user cycles at those conditions must consume
+            # exactly initial_soh - end_of_life_soh.
+            soh_budget = float(battery_degradation_settings.get("initial_soh", 1.0)) - float(
+                battery_degradation_settings.get("end_of_life_soh", None) or 0.8
+            )
+            coeff_res = cycle_fade_coefficient(
                 chemistry=chemistry,
                 depth_of_discharge=dod_value,
-                temperature_degc=ambient_temperature.values,
-                n_bands=n_bands,
+                temperature_degc=cell_temperature.values,
                 user_cycle_life=user_cycle_life,
+                usable_soh_budget=soh_budget,
+                reference_dod=float(bat_params_ds["battery_cycle_life_reference_dod"].item()),
+                reference_temperature_degc=float(
+                    bat_params_ds["battery_cycle_life_reference_temperature_c"].item()
+                ),
             )
-            t_bar_y = ambient_temperature.mean(dim=("period", "scenario"))
-            cal_rate = calendar_rate_per_year(chemistry, dod_value, t_bar_y.values)
+            t_bar_y = cell_temperature.mean(dim=("period", "scenario"))
+            if calendar_life_is_derived:
+                # Service life is not an independent assumption: it is the year the cohort
+                # reaches end_of_life_soh. Cycling intensity is the one thing we cannot know
+                # before solving, so it is estimated from the load and irradiance profiles.
+                efc_per_year, dark_load = _estimate_equivalent_full_cycles_per_year(
+                    load_demand=load_demand,
+                    resource_availability=resource_avail,
+                    end_of_life_soh=float(battery_degradation_settings.get("end_of_life_soh", None) or 0.8),
+                )
+                _c_da = xr.DataArray(
+                    coeff_res["c"], dims=ambient_temperature.dims, coords=dict(ambient_temperature.coords)
+                ).isel(year=0)
+                if "scenario" in _c_da.dims:
+                    _c_da = _c_da.mean("scenario")
+                _w = dark_load.where(dark_load > 0.0, 0.0)
+                _w_sum = float(_w.sum())
+                c_discharge_weighted = (
+                    float((_c_da * _w).sum() / _w_sum) if _w_sum > 0.0 else float(_c_da.mean())
+                )
+                cycle_fade_per_year = c_discharge_weighted * efc_per_year * dod_value
+                derived_life = implied_calendar_life(
+                    chemistry,
+                    mean_soc,
+                    float(cell_temperature.mean()),
+                    cycle_fade_per_year=cycle_fade_per_year,
+                    usable_soh_budget=soh_budget,
+                    scale=calendar_scale,
+                )
+                # The replacement masks step in whole years, and rounding DOWN keeps the
+                # cohort inside its SoH budget rather than tripping the guard below.
+                calendar_ref_years = float(max(1.0, math.floor(derived_life)))
+                bat_params_ds = bat_params_ds.copy()
+                bat_params_ds["battery_calendar_lifetime_years"] = xr.full_like(
+                    bat_params_ds["battery_calendar_lifetime_years"], calendar_ref_years
+                )
+                battery_degradation_settings["calendar_lifetime_mode"] = "derived"
+                battery_degradation_settings["calendar_lifetime_years_derived"] = float(derived_life)
+                battery_degradation_settings["calendar_lifetime_years_used"] = calendar_ref_years
+                battery_degradation_settings["assumed_equivalent_full_cycles_per_year"] = float(efc_per_year)
+                battery_degradation_settings["assumed_cycle_fade_per_year"] = float(cycle_fade_per_year)
+                battery_degradation_settings["discharge_weighted_cycle_fade_coefficient"] = float(
+                    c_discharge_weighted
+                )
+                battery_degradation_settings["mean_cell_temperature_c"] = float(cell_temperature.mean())
+            else:
+                battery_degradation_settings["calendar_lifetime_mode"] = "user"
+                battery_degradation_settings["calendar_lifetime_years_used"] = calendar_ref_years
+            cal_rate = calendar_rate_per_year(
+                chemistry,
+                mean_soc,
+                t_bar_y.values,
+                reference_years=calendar_ref_years,
+                scale=calendar_scale,
+            )
+            # Calendar fade and the end-of-life floor are both proportional to nameplate
+            # energy, so if calendar fade alone outruns the SoH budget over a cohort's life
+            # the LP is infeasible and no amount of oversizing helps. Catch it here, where
+            # we can say which input is inconsistent.
+            _soh0 = float(battery_degradation_settings.get("initial_soh", 1.0))
+            _soh_eol = battery_degradation_settings.get("end_of_life_soh", None)
+            if _soh_eol is not None and np.isfinite(float(_soh_eol)):
+                _budget = _soh0 - float(_soh_eol)
+                _worst = float(np.nanmax(cal_rate)) * (calendar_ref_years - 1.0)
+                if _worst >= _budget:
+                    _max_life = _budget / float(np.nanmax(cal_rate)) + 1.0
+                    raise InputValidationError(
+                        "Battery calendar ageing alone exhausts the usable SoH budget before the "
+                        f"battery is replaced: {100.0 * float(np.nanmax(cal_rate)):.2f} %/yr over "
+                        f"{calendar_ref_years:.0f} y consumes {100.0 * _worst:.1f} % against a budget of "
+                        f"{100.0 * _budget:.1f} % (initial_soh - end_of_life_soh). Cycle ageing and "
+                        "oversizing cannot relieve this because both the fade and the end-of-life floor "
+                        "scale with nameplate energy. Lower battery.investment.*.calendar_lifetime_years "
+                        f"to at most {_max_life:.1f} y for this site's cell temperature "
+                        f"({float(t_bar_y.max()):.1f} degC mean, including a "
+                        f"{enclosure_rise:.1f} K enclosure rise), or reduce "
+                        "battery.technical.enclosure_temperature_rise_c / calendar_fade_scale."
+                    )
         except BatteryCoefficientsInputValidationError as exc:
             raise InputValidationError(str(exc)) from exc
-        data["battery_ck_bands"] = xr.DataArray(
-            band_res["c_k"],
-            dims=("soc_band",) + ambient_temperature.dims,
-            coords={"soc_band": np.arange(n_bands), **dict(ambient_temperature.coords)},
-            name="battery_ck_bands",
+        data["battery_cycle_fade_coefficient"] = xr.DataArray(
+            coeff_res["c"],
+            dims=ambient_temperature.dims,
+            coords=dict(ambient_temperature.coords),
+            name="battery_cycle_fade_coefficient",
             attrs={
                 "units": "fraction_nameplate_per_depth_fraction",
                 "chemistry": chemistry,
-                "usable_band_edges": [float(e) for e in band_res["usable_band_edges"]],
+                "depth_of_discharge": dod_value,
+                "enclosure_temperature_rise_c": enclosure_rise,
+                "cycle_life_scaling": coeff_res["cycle_life_scaling"],
+                "rated_cycles": user_cycle_life,
+                "rated_at_dod": float(bat_params_ds["battery_cycle_life_reference_dod"].item()),
+                "rated_at_temperature_c": float(
+                    bat_params_ds["battery_cycle_life_reference_temperature_c"].item()
+                ),
             },
         )
         data["battery_calendar_rate_per_year"] = xr.DataArray(
@@ -2014,10 +2170,18 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
             coords={"year": year_coord},
             dims=("year",),
             name="battery_calendar_rate_per_year",
-            attrs={"units": "fraction_nameplate_per_year", "chemistry": chemistry},
+            attrs={
+                "units": "fraction_nameplate_per_year",
+                "chemistry": chemistry,
+                "mean_soc": mean_soc,
+                "enclosure_temperature_rise_c": enclosure_rise,
+                "calendar_fade_scale": calendar_scale,
+                "linearised_over_years": calendar_ref_years,
+                "sources": CALENDAR_FADE_SOURCES,
+            },
         )
         battery_degradation_settings["chemistry"] = chemistry
-        battery_degradation_settings["cycle_life_scaling"] = band_res["cycle_life_scaling"]
+        battery_degradation_settings["cycle_life_scaling"] = coeff_res["cycle_life_scaling"]
         battery_degradation_settings["coefficient_source"] = "layer1_liion_coefficients.json"
 
     battery_curve_path = bat_params_ds.attrs.get("efficiency_curve_file", None)
