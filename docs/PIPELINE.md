@@ -17,7 +17,8 @@ SGE array task N  ── hpc/submit_array.sh ──►  python -m mgpy2.run_clus
         ├─ 1. PREPARE  mgpy2/config_map.build_project
         │        ├─ project skeleton + techno-economic YAMLs   (ThesisConfig)
         │        ├─ demand     mgpy2/input_prep.compute_demand_kwh   ─► inputs/load_demand.csv
-        │        └─ solar      mgpy2/input_prep.compute_resource_cf  ─► inputs/resource_availability.csv
+        │        ├─ solar      mgpy2/input_prep.compute_resource_and_temperature  ─► inputs/resource_availability.csv
+        └─ temperature (same PVGIS call)                                  ─► inputs/ambient_temperature.csv
         │
         ├─ 2. SOLVE    engines/new  core.multi_year_model.MultiYearModel   (linopy + Gurobi/HiGHS)
         │
@@ -102,12 +103,17 @@ Every result records the mode it used: `summary.json` → `meta.run.pipeline_con
 
 ## 4. Solar resource
 
-`input_prep.compute_resource_cf` → old-engine `pvgis.download_pvgis_pv_data`.
+`input_prep.compute_resource_and_temperature` → old-engine `pvgis.download_pvgis_pv_data`.
 
 - Downloads the PVGIS **typical meteorological year** for the cluster's lat/lon
   (`https://re.jrc.ec.europa.eu/api/tmy`), tilt 10°, azimuth 180°, with a temperature correction.
 - PV output for a 1000 W array ÷ 1000 → hourly **capacity factor**; the same year is
   repeated for all 20 years → `inputs/resource_availability.csv`.
+- The same response carries the hourly 2 m air temperature (`T2m`, °C). It is tiled over the
+  20 years the same way and written to `inputs/ambient_temperature.csv` (same layout as
+  `load_demand.csv`). The engine loads it as `Params.ambient_temperature`
+  (dims period × year × scenario); it is not used by the LP yet — it is there for the
+  battery-degradation model. The file is optional, so older projects still load.
 - **Needs internet on the node** in `RUN_MODE=full`. With offline nodes: prepare on the
   login node (`orchestrator.py --prepare-only`), then run with `RUN_MODE=solve-only`.
 - **Fails loudly** (since 16 Sep 2026): each download has a timeout (10 s connect,
@@ -116,6 +122,26 @@ Every result records the mode it used: `summary.json` → `meta.run.pipeline_con
   (Before, a failure silently became ZERO sun. In the PV+battery baseline such clusters
   were infeasible, so no August result is affected.)
 - PVGIS updates its database over time, so re-downloading later may not give identical inputs.
+
+### 4b. Battery-degradation inputs (Li-ion, inputs only)
+
+`inputs/battery.yaml` carries `chemistry` (LFP | NMC), `initial_soh`, `end_of_life_soh`,
+`cycle_lifetime_to_eol_cycles`; `formulation.json` → `battery_model.degradation_model` carries
+`coefficients_enabled` and `n_soc_bands` (1..10). When enabled, the engine
+(`data_pipeline/battery_degradation_coefficients.py`, pre-fitted `layer1_liion_coefficients.json`)
+builds, from `ambient_temperature`:
+
+- `Params.battery_ck_bands` (soc_band × period × year × scenario): cycle-fade marginal cost of each
+  usable-SOC band, fraction of nameplate lost per unit depth-fraction. The usable range
+  `[0, DoD]` is split into `n_soc_bands` equal bands (band 0 = shallowest). Shape is fixed; it is
+  scaled by `N_ref / cycle_lifetime_to_eol_cycles` (N_ref: LFP 6000, NMC 2500) and varies with T.
+  Non-decreasing with depth (convex), so the LP will fill cheap bands first without binaries.
+- `Params.battery_calendar_rate_per_year` (year): calendar fade from the annual-mean T.
+
+Defaults: LFP, 6000 cycles to 80 % SoH, initial SoH 1.0, DoD 0.8, 3 bands. Three bands match the
+10-band reference curve to 0.1 % of full-DoD fade (same as 5 bands); 1 band is within 0.4 %.
+These arrays are **not used by the LP yet** (identical variables/constraints with the flag on or off).
+Missing `ambient_temperature.csv` or an unknown chemistry with the flag on raises `InputValidationError`.
 
 ---
 

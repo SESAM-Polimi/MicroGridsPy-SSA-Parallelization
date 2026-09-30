@@ -12,6 +12,7 @@ sample row ($SAMPLE_CSV; task N = row N via mgpy2.sample)
    -> input_prep.write_demand_and_resource
         demand:   microgridspy.utils.archetypes.demand_calculation  (+ School_weights)  -> load_demand.csv (kWh)
         solar:    microgridspy.utils.pvgis.download_pvgis_pv_data    -> resource_availability.csv (capacity factor)
+                                                                  + ambient_temperature.csv (PVGIS T2m, degC)
    -> run_cluster: MultiYearModel(project).solve_single_objective(highs)
    -> export (profile="core", default): summary.json + dispatch.<parquet|csv>
       (profile="full" writes the legacy CSV+Excel bundle)          -> projects/<cat>/results/
