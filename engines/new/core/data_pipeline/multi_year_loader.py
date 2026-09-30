@@ -34,6 +34,8 @@ def _align_contract_dims(ds: xr.Dataset) -> xr.Dataset:
     """
     ds = _transpose_if_present(ds, "load_demand", ("period", "year", "scenario"))
     ds = _transpose_if_present(ds, "resource_availability", ("period", "year", "scenario", "resource"))
+    ds = _transpose_if_present(ds, "ambient_temperature", ("period", "year", "scenario"))
+    ds = _transpose_if_present(ds, "battery_ck_bands", ("soc_band", "period", "year", "scenario"))
     ds = _transpose_if_present(ds, "grid_import_price", ("period", "year", "scenario"))
     ds = _transpose_if_present(ds, "grid_export_price", ("period", "year", "scenario"))
     ds = _transpose_if_present(ds, "grid_availability", ("period", "year", "scenario"))

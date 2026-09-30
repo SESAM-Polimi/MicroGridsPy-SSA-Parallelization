@@ -5,7 +5,7 @@ on the NEW MicroGridsPy engine ("MicroGridsPy Updated", package `core.*`).
 Design (see memory: migration-old-to-new-mgpy):
   * demand + solar are produced by the OLD engine's archetype/PVGIS code
     (`microgridspy.utils.archetypes`, `microgridspy.utils.pvgis`) and written
-    as NEW-format CSV templates (`load_demand.csv`, `resource_availability.csv`);
+    as NEW-format CSV templates (`load_demand.csv`, `resource_availability.csv`, `ambient_temperature.csv`);
   * the NEW engine (`core.multi_year_model.MultiYearModel`) then solves each
     cluster from its `projects/<cat>/inputs/*` files and exports results.
 
