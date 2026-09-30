@@ -1,19 +1,23 @@
 """
 input_prep.py — produce NEW-engine input CSVs from the OLD engine's science.
 
-Two deliverables per cluster, written into `<project>/inputs/`:
+Three deliverables per cluster, written into `<project>/inputs/`:
 
   load_demand.csv            2-row header (scenario, year); col ("meta","hour")=0..8759;
                              values = hourly demand in **kWh**.
   resource_availability.csv  3-row header (scenario, year, resource); col ("meta","hour","");
                              values = **capacity factor** (0..1) per renewable resource.
+  ambient_temperature.csv    same 2-row layout as load_demand.csv; values = hourly
+                             ambient temperature in **degC** (PVGIS TMY T2m, the same
+                             download as the solar series; typical year repeated).
 
 Faithful to the thesis pipeline (old run_nostreamlit_update.run_yaml):
   * household + hospital demand via microgridspy.utils.archetypes.demand_calculation
     (called with num_schools=0);
   * school demand distributed separately via Data_sheet/School_weights.csv and the
     per-row `school_total_demand`, grown year-on-year at `demand_growth`;
-  * solar via microgridspy.utils.pvgis.download_pvgis_pv_data.
+  * solar via microgridspy.utils.pvgis.download_pvgis_pv_data (its T2m series is also
+    returned, `return_temperature=True`, so temperature costs no extra request).
 
 Unit bridges (the silent-risk conversions):
   * old demand is in **Wh**  -> divide by 1000 for kWh;
@@ -170,7 +174,7 @@ PVGIS_RETRY_WAIT_S = 30     # wait 30 s, then 60 s, ... between tries
 
 
 def _download_pv_with_retry(res: ResourceParams):
-    """Call the PVGIS download, retrying transient failures.
+    """Call the PVGIS download, retrying transient failures. Returns (pv, T2m degC list).
 
     Only network/HTTP/response problems are retried: requests errors, the ValueError the
     downloader raises on a non-200 status, and a KeyError for an unexpected JSON body.
@@ -186,6 +190,7 @@ def _download_pv_with_retry(res: ResourceParams):
                 res_name="Solar PV", base_URL=res.base_url, output_format=res.output_format,
                 lat=res.lat, lon=res.lon, nom_power=res.nom_power, tilt=res.tilt, azimuth=res.azim,
                 ro_ground=res.ro_ground, k_T=res.k_T, NMOT=res.NMOT, T_NMOT=res.T_NMOT, G_NMOT=res.G_NMOT,
+                return_temperature=True,
             )
         except (requests.RequestException, ValueError, KeyError) as e:
             last_error = e
@@ -199,8 +204,15 @@ def _download_pv_with_retry(res: ResourceParams):
     ) from last_error
 
 
-def compute_resource_cf(res: ResourceParams, cfg: PrepConfig) -> np.ndarray:
-    """Return (periods, years) capacity factors. Typical year repeated across years.
+AMBIENT_TEMP_MIN_C = -60.0
+AMBIENT_TEMP_MAX_C = 70.0
+
+
+def compute_resource_and_temperature(res: ResourceParams, cfg: PrepConfig):
+    """Return (cf, temperature_degC), each (periods, years). Typical year repeated across years.
+
+    One PVGIS request feeds both: the solar capacity factor and the ambient (T2m)
+    temperature series, so they are consistent by construction.
 
     Fails loudly: if PVGIS cannot be reached (after retries) or returns no sun at all,
     an exception is raised, so the cluster ends with error.txt and appears on the
@@ -209,7 +221,7 @@ def compute_resource_cf(res: ResourceParams, cfg: PrepConfig) -> np.ndarray:
     ensure_engines_importable()
     periods, years = cfg.periods, cfg.years
 
-    pv = _download_pv_with_retry(res)
+    pv, t_amb = _download_pv_with_retry(res)
     if isinstance(pv, pd.DataFrame):
         series = pv.iloc[:, 0].to_numpy(dtype="float64")
     else:
@@ -221,7 +233,16 @@ def compute_resource_cf(res: ResourceParams, cfg: PrepConfig) -> np.ndarray:
     cf_year = np.clip(cf_year, 0.0, None)  # guard tiny negatives from temp term
     if not np.isfinite(cf_year).all() or cf_year.max() <= 0.0:
         raise ValueError(f"PVGIS data for lat={res.lat} lon={res.lon} has no usable solar output.")
-    return np.tile(cf_year.reshape(periods, 1), (1, years))
+
+    temp_year = np.asarray(t_amb, dtype="float64").ravel()
+    if temp_year.shape[0] != periods:
+        raise ValueError(f"PVGIS returned {temp_year.shape[0]} temperature periods, expected {periods}.")
+    if (not np.isfinite(temp_year).all()
+            or temp_year.min() < AMBIENT_TEMP_MIN_C or temp_year.max() > AMBIENT_TEMP_MAX_C):
+        raise ValueError(f"PVGIS temperature for lat={res.lat} lon={res.lon} is non-finite or outside "
+                         f"[{AMBIENT_TEMP_MIN_C}, {AMBIENT_TEMP_MAX_C}] degC.")
+    return (np.tile(cf_year.reshape(periods, 1), (1, years)),
+            np.tile(temp_year.reshape(periods, 1), (1, years)))
 
 
 # =============================================================================
@@ -242,6 +263,11 @@ def build_load_demand_df(demand_kwh: np.ndarray, cfg: PrepConfig) -> pd.DataFram
     for j, y in enumerate(cfg.year_labels):
         df[(str(cfg.scenario), str(y))] = demand_kwh[:, j]
     return df
+
+
+def build_ambient_temperature_df(temp_degc: np.ndarray, cfg: PrepConfig) -> pd.DataFrame:
+    """ambient_temperature.csv shares the load_demand.csv layout (values in degC)."""
+    return build_load_demand_df(temp_degc, cfg)
 
 
 def build_resource_df(cf: np.ndarray, cfg: PrepConfig) -> pd.DataFrame:
@@ -269,12 +295,13 @@ def _write_csv(df: pd.DataFrame, path: Path, cfg: PrepConfig) -> None:
 
 def write_demand_and_resource(inputs_dir: Path, row: dict, res: ResourceParams,
                               cfg: PrepConfig, weights_path: Optional[Path] = None) -> None:
-    """High-level: compute + write both CSVs into inputs_dir."""
+    """High-level: compute + write demand, resource and ambient-temperature CSVs into inputs_dir."""
     inputs_dir = Path(inputs_dir)
     demand_kwh = compute_demand_kwh(row, cfg, weights_path=weights_path)
-    cf = compute_resource_cf(res, cfg)
+    cf, temp_degc = compute_resource_and_temperature(res, cfg)
     _write_csv(build_load_demand_df(demand_kwh, cfg), inputs_dir / "load_demand.csv", cfg)
     _write_csv(build_resource_df(cf, cfg), inputs_dir / "resource_availability.csv", cfg)
+    _write_csv(build_ambient_temperature_df(temp_degc, cfg), inputs_dir / "ambient_temperature.csv", cfg)
 
 
 # =============================================================================
@@ -290,11 +317,13 @@ def _selftest() -> int:
     rng = np.random.default_rng(0)
     demand = rng.random((PERIODS_PER_YEAR, years)) * 10.0
     cf = np.clip(rng.random((PERIODS_PER_YEAR, years)), 0, 1)
+    temp = 15.0 + 10.0 * rng.random((PERIODS_PER_YEAR, 1)).repeat(years, axis=1)
 
     with tempfile.TemporaryDirectory() as d:
         dd = Path(d)
         _write_csv(build_load_demand_df(demand, cfg), dd / "load_demand.csv", cfg)
         _write_csv(build_resource_df(cf, cfg), dd / "resource_availability.csv", cfg)
+        _write_csv(build_ambient_temperature_df(temp, cfg), dd / "ambient_temperature.csv", cfg)
 
         ld = read_csv_with_format(dd / "load_demand.csv", header=[0, 1])
         ra = read_csv_with_format(dd / "resource_availability.csv", header=[0, 1, 2])
@@ -305,6 +334,9 @@ def _selftest() -> int:
         # value round-trips (first scenario/year demand column)
         assert np.allclose(ld.iloc[:, 1].to_numpy(dtype=float), demand[:, 0], atol=1e-6)
         assert np.allclose(ra.iloc[:, 1].to_numpy(dtype=float), cf[:, 0], atol=1e-6)
+        at = read_csv_with_format(dd / "ambient_temperature.csv", header=[0, 1])
+        assert at.shape[0] == PERIODS_PER_YEAR, at.shape
+        assert np.allclose(at.iloc[:, 1].to_numpy(dtype=float), temp[:, 0], atol=1e-6)
     print("[input_prep selftest] OK — CSV format round-trips through engine reader.")
     return 0
 

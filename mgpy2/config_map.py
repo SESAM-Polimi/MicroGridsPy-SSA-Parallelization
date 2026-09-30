@@ -88,6 +88,16 @@ class ThesisConfig:
     battery_max_charge_c_rate: float = 1.0 / 5.0     # THESIS-MAP: 1 / max charge time (5 h)
     battery_max_discharge_c_rate: float = 1.0 / 4.0  # THESIS-MAP: 1 / max discharge time (4 h)
 
+    # Li-ion degradation INPUTS (pre-fitted coefficients; not yet used by the LP).
+    # Defaults: LFP stationary cell, 6000 cycles to 80 % SoH at 80 % DoD (the rated cycle life
+    # the c_k shape was fitted at; NMC reference is 2500).
+    battery_degradation_coefficients: bool = True
+    battery_chemistry: str = "LFP"                      # "LFP" | "NMC"
+    battery_cycle_lifetime_to_eol_cycles: float = 6000.0
+    battery_end_of_life_soh: float = 0.8
+    battery_initial_soh: float = 1.0
+    battery_n_soc_bands: int = 3                        # 1..10; 3 is within 0.1 % of 5 bands
+
     # --- optional system extensions (NOT required for feasibility) --------------
     # A pure PV+battery, off-grid, zero-lost-load system (the thesis design) is
     # feasible once the battery c-rates above are set. These remain available if you
@@ -161,7 +171,9 @@ def build_formulation_payload(project_name: str, cfg: ThesisConfig, description:
         },
         "system_configuration": {"n_sources": 1},
         "battery_model": {"loss_model": "constant_efficiency",
-                          "degradation_model": {"cycle_fade_enabled": False, "calendar_fade_enabled": False}},
+                          "degradation_model": {"cycle_fade_enabled": False, "calendar_fade_enabled": False,
+                                                "coefficients_enabled": cfg.battery_degradation_coefficients,
+                                                "n_soc_bands": cfg.battery_n_soc_bands}},
         "generator_model": {"efficiency_model": "constant_efficiency"},
         "csv_format": {"delimiter": cfg.csv_delimiter, "decimal": cfg.csv_decimal},
     }
@@ -190,10 +202,10 @@ def build_template_settings(cfg: ThesisConfig):
         battery_cycle_fade_enabled=False,
         battery_calendar_fade_enabled=False,
         battery_efficiency_curve_csv="",
-        battery_cycle_lifetime_to_eol_cycles=3000.0,
+        battery_cycle_lifetime_to_eol_cycles=cfg.battery_cycle_lifetime_to_eol_cycles,
         battery_calendar_fade_curve_csv="",
         battery_calendar_time_increment_per_step=0.0,
-        battery_end_of_life_soh=0.8,
+        battery_end_of_life_soh=cfg.battery_end_of_life_soh,
         generator_label="Generator",
         generator_efficiency_model="constant_efficiency",
         generator_efficiency_curve_csv="",
@@ -263,6 +275,10 @@ def _patch_battery_yaml(path: Path, cfg: ThesisConfig) -> None:
         # MUST be finite/positive — null is read as 0 and disables the battery.
         "max_charge_c_rate": cfg.battery_max_charge_c_rate,
         "max_discharge_c_rate": cfg.battery_max_discharge_c_rate,
+        "chemistry": cfg.battery_chemistry,
+        "initial_soh": cfg.battery_initial_soh,
+        "end_of_life_soh": cfg.battery_end_of_life_soh,
+        "cycle_lifetime_to_eol_cycles": cfg.battery_cycle_lifetime_to_eol_cycles,
     })
     path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
 

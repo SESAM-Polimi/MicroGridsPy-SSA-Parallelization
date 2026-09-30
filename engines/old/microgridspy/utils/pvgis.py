@@ -174,11 +174,14 @@ def download_pvgis_pv_data(
     NMOT: float,
     T_NMOT: float,
     G_NMOT: float,
-    log_info: callable = None
-    ) -> pd.DataFrame:
+    log_info: callable = None,
+    return_temperature: bool = False,
+    ):
     """
     Downloads and processes PVGIS PV data to generate a time series of solar PV energy production.
     Parameters:
+        return_temperature: if True, return (energy_df, ambient_temperature_degC) where the
+            temperature is the hourly PVGIS TMY T2m series (same download, no extra request).
     """
 
     start = time.time()
@@ -225,6 +228,8 @@ def download_pvgis_pv_data(
     end = time.time()
     elapsed = end - start
     log('\n\nSolar PV time series calculation completed (overall time: {}, s, {} m)\n'.format(round(elapsed, 0), round(elapsed / 60, 1)))
+    if return_temperature:
+        return dataf, [t for day in T_amb for t in day]
     return dataf
 
 
