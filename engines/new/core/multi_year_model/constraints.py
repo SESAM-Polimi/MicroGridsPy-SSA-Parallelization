@@ -304,45 +304,7 @@ def initialize_constraints(
     # ------------------------------------------------------------------
     # 3) Fuel-to-power relation (only when a generator exists)
     # ------------------------------------------------------------------
-    if gen_gen is not None and fuel_cons is not None and p.generator_fuel_curve_rel_fuel_use is not None and p.generator_eff_curve_rel_power is not None:
-        pl_rel = p.generator_eff_curve_rel_power
-        pl_fuel_rel = p.generator_fuel_curve_rel_fuel_use
-        P = int(pl_rel.sizes["curve_point"])
-        seg = xr.IndexVariable("segment", np.arange(P - 1))
-        for inv in sets.coords["inv_step"].values.tolist():
-            inv_name = str(inv)
-            lhv_k = fuel_lhv.sel(inv_step=inv) if "inv_step" in fuel_lhv.dims else fuel_lhv
-            cap_k = gen_cap_available.sel(inv_step=inv)
-            r_full = pl_rel.sel(inv_step=inv) if "inv_step" in pl_rel.dims else pl_rel
-            phi_full = pl_fuel_rel.sel(inv_step=inv) if "inv_step" in pl_fuel_rel.dims else pl_fuel_rel
-
-            if not (np.isfinite(r_full.values).all() and np.isfinite(phi_full.values).all()):
-                raise InputValidationError("Generator partial-load fuel-use curve contains NaNs.")
-            if np.any(np.diff(r_full.values.astype(float)) < 0.0):
-                raise InputValidationError("Generator partial-load curve must be sorted by increasing relative power output.")
-            positive_power_mask = np.asarray(r_full.values, dtype=float) > 0.0
-            if np.any(np.asarray(phi_full.values, dtype=float)[positive_power_mask] <= 0.0):
-                raise InputValidationError("Generator partial-load fuel-use curve contains non-positive values at positive output.")
-
-            rel0 = r_full.isel(curve_point=seg)
-            rel1 = r_full.isel(curve_point=seg + 1)
-            phi0 = phi_full.isel(curve_point=seg)
-            phi1 = phi_full.isel(curve_point=seg + 1)
-            rel_span = rel1 - rel0
-            if np.any(np.isclose(rel_span.values.astype(float), 0.0)):
-                raise InputValidationError("Generator partial-load curve contains repeated relative-power points.")
-
-            alpha0 = phi0 / float(lhv_k)
-            alpha1 = phi1 / float(lhv_k)
-            slope = (alpha1 - alpha0) / rel_span
-            intercept = alpha0 - slope * rel0
-
-            gen_k = gen_gen.sel(inv_step=inv).expand_dims(segment=seg)
-            fuel_k = fuel_cons.sel(inv_step=inv).expand_dims(segment=seg)
-            cap_seg = cap_k.expand_dims(segment=seg)
-            rhs = slope * gen_k + intercept * cap_seg
-            model.add_constraints(fuel_k >= rhs, name=f"fuel_to_power_partial_load_{inv_name}")
-    elif gen_gen is not None and fuel_cons is not None:
+    if gen_gen is not None and fuel_cons is not None:
         model.add_constraints(
             gen_gen == fuel_cons * fuel_lhv * gen_eta_full,
             name="fuel_to_power_nominal_eta",

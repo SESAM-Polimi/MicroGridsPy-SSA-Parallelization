@@ -14,14 +14,18 @@ from core.data_pipeline.battery_loss_model import (
     InputValidationError as BatteryLossInputValidationError,
     get_battery_loss_model_from_formulation,
     load_battery_loss_curve_dataset,
-    resolve_efficiency_curve_values,
 )
-from core.data_pipeline.generator_partial_load_model import build_generator_partial_load_surrogate
 from core.data_pipeline.battery_degradation_model import (
     InputValidationError as BatteryDegradationInputValidationError,
     derive_cycle_fade_coefficient_from_cycle_life,
     get_battery_degradation_settings,
     suppress_exogenous_battery_capacity_degradation_when_endogenous,
+)
+from core.data_pipeline.battery_degradation_coefficients import (
+    InputValidationError as BatteryCoefficientsInputValidationError,
+    calendar_rate_per_year,
+    evaluate_band_marginals,
+    normalize_chemistry,
 )
 from core.data_pipeline.battery_calendar_fade_model import (
     InputValidationError as BatteryCalendarFadeInputValidationError,
@@ -283,29 +287,6 @@ def _require_shared_legacy_scenario_value(
     return first
 
 
-def _validate_generator_partial_load_curve(
-    *,
-    rel: np.ndarray,
-    eff: np.ndarray,
-    path: Path,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Validate the implied generator fuel curve in relative units and return a
-    zero-anchored raw curve together with the convex surrogate used by the LP
-    secant-envelope formulation.
-
-    The generator CSV column is resolved upstream either as a normalized
-    multiplier relative to `generator_nominal_efficiency_full_load` or as a
-    backward-compatible absolute-efficiency curve. This validator works on the
-    resulting absolute efficiencies.
-    """
-    return build_generator_partial_load_surrogate(
-        rel=rel,
-        eff=eff,
-        path=path,
-        error_cls=InputValidationError,
-    )
-
 # -----------------------------------------------------------------------------
 # load data from CSV templates
 # -----------------------------------------------------------------------------
@@ -417,6 +398,83 @@ def _load_load_demand_csv(
     ).transpose("year", "period", "scenario")
 
     return da
+
+# -----------------------------------------------------------------------------
+# load ambient temperature from CSV template (same layout as load_demand)
+# -----------------------------------------------------------------------------
+_AMBIENT_TEMP_MIN_C = -60.0
+_AMBIENT_TEMP_MAX_C = 70.0
+
+
+def _load_ambient_temperature_csv(
+    path: Path,
+    *,
+    period_coord: xr.DataArray,
+    scenario_coord: xr.DataArray,
+    year_coord: xr.DataArray,
+) -> xr.DataArray:
+    """
+    Parse ambient_temperature.csv, which shares the multi-year load_demand.csv
+    2-row header layout (scenario, year) with one hourly column per combination.
+    Values are ambient temperature in degrees Celsius. Returns an xr.DataArray
+    with dims (year, period, scenario), like load_demand.
+    """
+    df = read_csv_with_format(path, header=[0, 1])
+
+    if ("meta", "hour") not in df.columns:
+        raise InputValidationError(
+            f"{path.name}: missing required column ('meta','hour'). "
+            "Time-series templates must include meta/hour as the first column."
+        )
+    hour = pd.to_numeric(df[("meta", "hour")], errors="coerce")
+    if hour.isna().any():
+        raise InputValidationError(f"{path.name}: meta/hour contains non-numeric values.")
+    hour = hour.astype(int).to_numpy()
+    expected = np.asarray(period_coord.values, dtype=int)
+    if hour.shape[0] != expected.shape[0]:
+        raise InputValidationError(f"{path.name}: expected {expected.shape[0]} hours, got {hour.shape[0]}.")
+    if not np.array_equal(hour, expected):
+        mismatch_idx = int(np.where(hour != expected)[0][0])
+        raise InputValidationError(
+            f"{path.name}: meta/hour does not match sets.period. "
+            f"First mismatch at row {mismatch_idx}: file={hour[mismatch_idx]} vs sets={expected[mismatch_idx]}."
+        )
+
+    scenario_labels = [str(s) for s in scenario_coord.values.tolist()]
+    year_labels = [str(y) for y in year_coord.values.tolist()]
+    required = [(s, y) for s in scenario_labels for y in year_labels]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        missing_names = ", ".join([f"({a},{b})" for a, b in missing[:12]])
+        more = "" if len(missing) <= 12 else f" ... (+{len(missing) - 12} more)"
+        raise InputValidationError(
+            f"{path.name}: missing scenario/year columns: {missing_names}{more}. "
+            f"Expected all combinations of scenarios={scenario_labels} and years={year_labels}."
+        )
+
+    mat = pd.DataFrame(df.loc[:, required].to_numpy()).apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+    if not np.isfinite(mat).all():
+        r, c = np.argwhere(~np.isfinite(mat))[0]
+        s, y = required[int(c)]
+        raise InputValidationError(
+            f"{path.name}: found missing/non-numeric temperature value at hour={hour[int(r)]}, "
+            f"scenario='{s}', year='{y}'."
+        )
+    if mat.min() < _AMBIENT_TEMP_MIN_C or mat.max() > _AMBIENT_TEMP_MAX_C:
+        raise InputValidationError(
+            f"{path.name}: temperatures must be in degrees Celsius within "
+            f"[{_AMBIENT_TEMP_MIN_C}, {_AMBIENT_TEMP_MAX_C}]; got min={mat.min():.1f}, max={mat.max():.1f}."
+        )
+
+    mat3 = mat.reshape(int(period_coord.size), int(scenario_coord.size), int(year_coord.size))
+    return xr.DataArray(
+        mat3,
+        coords={"period": period_coord, "scenario": scenario_coord, "year": year_coord},
+        dims=("period", "scenario", "year"),
+        name="ambient_temperature",
+        attrs={"units": "degC", "source_file": str(path)},
+    ).transpose("year", "period", "scenario")
+
 
 # -----------------------------------------------------------------------------
 # load resource availability from CSV template
@@ -1011,6 +1069,8 @@ def _load_battery_yaml(
         )
     ds = xr.Dataset(data_vars=data_vars)
     ds.attrs["battery_label"] = str(bat.get("label", "Battery"))
+    raw_chemistry = legacy_tech.get("chemistry", None)
+    ds.attrs["battery_chemistry"] = None if raw_chemistry in (None, "") else str(raw_chemistry)
     ds.attrs["efficiency_curve_file"] = shared_paths.get("efficiency_curve_csv", None)
     ds.attrs["battery_calendar_fade_curve_file"] = shared_paths.get("calendar_fade_curve_csv", None)
     ds.attrs["settings"] = {"inputs_loaded": {"battery_yaml": str(path)}, "formulation": "dynamic"}
@@ -1023,8 +1083,8 @@ def _load_generator_and_fuel_yaml(
     scenario_coord: xr.DataArray,
     inv_step_coord: xr.DataArray,
     year_coord: xr.DataArray,
-) -> Tuple[xr.Dataset, xr.Dataset, Optional[xr.Dataset], dict]:
-    """Load dynamic generator + fuel parameters from the current shared-technology schema."""
+) -> Tuple[xr.Dataset, xr.Dataset, dict]:
+    """Load dynamic generator + fuel parameters (constant nominal efficiency only)."""
     payload = _read_yaml(path)
 
     gen = payload.get("generator", None)
@@ -1058,7 +1118,7 @@ def _load_generator_and_fuel_yaml(
         "capacity_degradation_rate_per_year",
     ]
     OPTIONAL_SHARED_GEN_TECHNICAL = {"capacity_degradation_rate_per_year": 0.0}
-    SHARED_GEN_PATH_KEYS = ["efficiency_curve_csv"]
+    SHARED_GEN_PATH_KEYS = ["efficiency_curve_csv"]  # only used to reject non-empty values
 
     if "by_step" in gen:
         raise InputValidationError(
@@ -1153,7 +1213,6 @@ def _load_generator_and_fuel_yaml(
         )
     gen_ds = xr.Dataset(data_vars=gen_data_vars)
     gen_ds.attrs["generator_label"] = str(gen.get("label", "Generator"))
-    gen_ds.attrs["generator_efficiency_curve_file"] = shared_gen_paths.get("efficiency_curve_csv", None)
 
     fuel_shared_vals = {
         "lhv_kwh_per_unit_fuel": float("nan"),
@@ -1220,86 +1279,21 @@ def _load_generator_and_fuel_yaml(
     )
     fuel_ds.attrs["fuel_label"] = str(fuel.get("label", "Fuel"))
     shared_curve_file = shared_gen_paths.get("efficiency_curve_csv", None)
-    unique_curve_files = sorted({v for v in [shared_curve_file] if v})
-    partial_load_enabled = bool(unique_curve_files)
-    eff_curve_ds = None
-    if unique_curve_files:
-        curve_path = Path(shared_curve_file)
-        if not curve_path.is_absolute():
-            curve_path = inputs_dir / curve_path
-        if not curve_path.exists():
-            raise InputValidationError(f"{path.name}: generator efficiency curve not found: {curve_path}")
-        cdf = read_csv_with_format(curve_path)
-        req_cols = ["Relative Power Output [-]", "Efficiency [-]"]
-        for col in req_cols:
-            if col not in cdf.columns:
-                raise InputValidationError(f"{curve_path.name}: missing required column '{col}'.")
-        rel = pd.to_numeric(cdf["Relative Power Output [-]"], errors="coerce").to_numpy(dtype=float)
-        eff_raw = pd.to_numeric(cdf["Efficiency [-]"], errors="coerce").to_numpy(dtype=float)
-        if np.isnan(rel).any() or np.isnan(eff_raw).any():
-            raise InputValidationError(f"{curve_path.name}: contains non-numeric values in required columns.")
-        if rel.size < 1 or np.any(rel < 0.0) or np.any(rel > 1.0) or np.any(np.diff(rel) <= 0.0) or not np.isclose(rel[-1], 1.0, atol=1e-9):
-            raise InputValidationError(f"{curve_path.name}: invalid relative-power grid for the generator efficiency curve.")
-        eff, _, _ = resolve_efficiency_curve_values(
-            eff_raw,
-            base_efficiency=float(shared_gen_tech["nominal_efficiency_full_load"]),
-            path=curve_path,
-            column_name="Efficiency [-]",
-            allow_zero=True,
-        )
-        rel, eff, fuel_raw_rel, fuel_surrogate_rel = _validate_generator_partial_load_curve(
-            rel=rel,
-            eff=eff,
-            path=curve_path,
-        )
-        curve_point = xr.IndexVariable("curve_point", list(range(rel.size)))
-        eff_curve_ds = xr.Dataset(
-            data_vars={
-                "generator_eff_curve_rel_power": xr.DataArray(
-                    rel,
-                    coords={"curve_point": curve_point},
-                    dims=("curve_point",),
-                    attrs={"units": "-", "scenario_dependent": False},
-                ),
-                "generator_eff_curve_eff": xr.DataArray(
-                    eff,
-                    coords={"curve_point": curve_point},
-                    dims=("curve_point",),
-                    attrs={"units": "-", "scenario_dependent": False},
-                ),
-                "generator_fuel_curve_rel_fuel_use": xr.DataArray(
-                    fuel_surrogate_rel,
-                    coords={"curve_point": curve_point},
-                    dims=("curve_point",),
-                    attrs={
-                        "units": "-",
-                        "scenario_dependent": False,
-                        "description": "Convex surrogate of the relative fuel-use curve phi(r)=r/eta(r) used internally by the LP partial-load formulation.",
-                    },
-                ),
-                "generator_fuel_curve_rel_fuel_use_raw": xr.DataArray(
-                    fuel_raw_rel,
-                    coords={"curve_point": curve_point},
-                    dims=("curve_point",),
-                    attrs={
-                        "units": "-",
-                        "scenario_dependent": False,
-                        "description": "Raw relative fuel-use curve phi(r)=r/eta(r) derived from the user CSV before convex LP surrogate construction.",
-                    },
-                ),
-            }
+    if shared_curve_file:
+        raise InputValidationError(
+            f"{path.name}: generator.technical.efficiency_curve_csv='{shared_curve_file}' is not supported in the "
+            "multi-year model. The generator uses the constant `nominal_efficiency_full_load` only; set "
+            "`efficiency_curve_csv: null`."
         )
 
     meta_flags = {
-        "partial_load_modelling_enabled": partial_load_enabled,
-        "efficiency_curve_file": shared_curve_file,
         "generator_label": gen_ds.attrs.get("generator_label", "Generator"),
         "fuel_label": fuel_ds.attrs.get("fuel_label", "Fuel"),
         "fuel_cost_is_yearly": True,
         "fuel_cost_dims": ("scenario", "year"),
     }
 
-    return gen_ds, fuel_ds, eff_curve_ds, meta_flags
+    return gen_ds, fuel_ds, meta_flags
 
 
 def _load_price_csv_dynamic(
@@ -1812,6 +1806,18 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
         resource_coord=resource_coord,
     )
 
+    ambient_path = paths.inputs_dir / "ambient_temperature.csv"
+    ambient_temperature = (
+        _load_ambient_temperature_csv(
+            ambient_path,
+            period_coord=period_coord,
+            scenario_coord=scenario_coord,
+            year_coord=year_coord,
+        )
+        if ambient_path.exists()
+        else None
+    )
+
     data = xr.Dataset(
         data_vars={
             "scenario_weight": scenario_weights,
@@ -1824,6 +1830,8 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
             "resource_availability": resource_avail,
         }
     )
+    if ambient_temperature is not None:
+        data["ambient_temperature"] = ambient_temperature
 
     renewables_path = paths.inputs_dir / "renewables.yaml"
     ren_params_ds = _load_renewables_yaml(
@@ -1961,6 +1969,57 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
         if "battery_calendar_time_increment_per_year" in bat_params_ds.data_vars
         else battery_degradation_settings.get("battery_calendar_time_increment_per_year", 1.0)
     )
+    # ------------------------------------------------------------------
+    # Pre-fitted Li-ion degradation coefficients (inputs only; not yet used by the LP).
+    #   battery_ck_bands              (soc_band, period, year, scenario)  fraction/depth-fraction
+    #   battery_calendar_rate_per_year (year)                             fraction of nameplate/yr
+    # Shape is fixed for every cluster; only the PVGIS ambient temperature differs.
+    # ------------------------------------------------------------------
+    if battery_degradation_settings.get("coefficients_enabled", False):
+        if ambient_temperature is None:
+            raise InputValidationError(
+                "battery degradation coefficients are enabled "
+                "(battery_model.degradation_model.coefficients_enabled) but inputs/ambient_temperature.csv "
+                "is missing."
+            )
+        try:
+            chemistry = normalize_chemistry(bat_params_ds.attrs.get("battery_chemistry", None))
+            dod_value = float(bat_params_ds["battery_depth_of_discharge"].item())
+            user_cycle_life = battery_degradation_settings.get("cycle_lifetime_to_eol_cycles", None)
+            n_bands = int(battery_degradation_settings["n_soc_bands"])
+            band_res = evaluate_band_marginals(
+                chemistry=chemistry,
+                depth_of_discharge=dod_value,
+                temperature_degc=ambient_temperature.values,
+                n_bands=n_bands,
+                user_cycle_life=user_cycle_life,
+            )
+            t_bar_y = ambient_temperature.mean(dim=("period", "scenario"))
+            cal_rate = calendar_rate_per_year(chemistry, dod_value, t_bar_y.values)
+        except BatteryCoefficientsInputValidationError as exc:
+            raise InputValidationError(str(exc)) from exc
+        data["battery_ck_bands"] = xr.DataArray(
+            band_res["c_k"],
+            dims=("soc_band",) + ambient_temperature.dims,
+            coords={"soc_band": np.arange(n_bands), **dict(ambient_temperature.coords)},
+            name="battery_ck_bands",
+            attrs={
+                "units": "fraction_nameplate_per_depth_fraction",
+                "chemistry": chemistry,
+                "usable_band_edges": [float(e) for e in band_res["usable_band_edges"]],
+            },
+        )
+        data["battery_calendar_rate_per_year"] = xr.DataArray(
+            cal_rate,
+            coords={"year": year_coord},
+            dims=("year",),
+            name="battery_calendar_rate_per_year",
+            attrs={"units": "fraction_nameplate_per_year", "chemistry": chemistry},
+        )
+        battery_degradation_settings["chemistry"] = chemistry
+        battery_degradation_settings["cycle_life_scaling"] = band_res["cycle_life_scaling"]
+        battery_degradation_settings["coefficient_source"] = "layer1_liion_coefficients.json"
+
     battery_curve_path = bat_params_ds.attrs.get("efficiency_curve_file", None)
     battery_curve_ds = None
     if battery_loss_model == CONVEX_LOSS_EPIGRAPH:
@@ -2025,7 +2084,7 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
         )
         battery_curve_path = str(curve_path)
     genfuel_path = paths.inputs_dir / "generator.yaml"
-    gen_ds, fuel_ds, curve_ds, genfuel_meta = _load_generator_and_fuel_yaml(
+    gen_ds, fuel_ds, genfuel_meta = _load_generator_and_fuel_yaml(
         genfuel_path,
         inputs_dir=paths.inputs_dir,
         scenario_coord=scenario_coord,
@@ -2039,7 +2098,6 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
         bat_params_ds,
         gen_ds,
         fuel_ds,
-        curve_ds,
         battery_curve_ds,
         battery_calendar_curve_ds,
         compat="override",
@@ -2134,6 +2192,7 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
             "inputs_loaded": {
                 "load_demand_csv": str(load_path),
                 "resource_availability_csv": str(resource_path),
+                "ambient_temperature_csv": str(ambient_path) if ambient_temperature is not None else None,
                 "renewables_yaml": str(renewables_path),
                 "battery_yaml": str(battery_path),
                 "battery_efficiency_curve_csv": battery_curve_path,
@@ -2144,10 +2203,6 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
     )
 
     data.attrs["settings"].setdefault("generator", {})
-    data.attrs["settings"]["generator"]["partial_load_modelling_enabled"] = bool(
-        genfuel_meta.get("partial_load_modelling_enabled", False)
-    )
-    data.attrs["settings"]["generator"]["efficiency_curve_file"] = genfuel_meta.get("efficiency_curve_file")
     data.attrs["settings"]["generator"]["label"] = genfuel_meta.get("generator_label", "Generator")
     data.attrs["settings"]["fuel"] = {"label": genfuel_meta.get("fuel_label", "Fuel")}
     data.attrs["settings"]["battery_label"] = bat_params_ds.attrs.get("battery_label", "Battery")

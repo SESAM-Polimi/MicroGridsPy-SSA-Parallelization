@@ -13,6 +13,9 @@ class Params:
     # Common core series
     load_demand: Optional[xr.DataArray]
     resource_availability: Optional[xr.DataArray]
+    ambient_temperature: Optional[xr.DataArray]
+    battery_ck_bands: Optional[xr.DataArray]
+    battery_calendar_rate_per_year: Optional[xr.DataArray]
     scenario_weight: Optional[xr.DataArray]
 
     # Policy / externalities
@@ -55,6 +58,8 @@ class Params:
     battery_discharge_efficiency: Optional[xr.DataArray]
     battery_initial_soc: Optional[xr.DataArray]
     battery_initial_soh: Optional[xr.DataArray]
+    battery_end_of_life_soh: Optional[xr.DataArray]
+    battery_cycle_lifetime_to_eol_cycles: Optional[xr.DataArray]
     battery_depth_of_discharge: Optional[xr.DataArray]
     battery_max_charge_c_rate: Optional[xr.DataArray]
     battery_max_discharge_c_rate: Optional[xr.DataArray]
@@ -86,11 +91,6 @@ class Params:
     grid_import_price: Optional[xr.DataArray]
     grid_export_price: Optional[xr.DataArray]
 
-    # Optional curve vars + coord
-    generator_eff_curve_rel_power: Optional[xr.DataArray]
-    generator_eff_curve_eff: Optional[xr.DataArray]
-    generator_fuel_curve_rel_fuel_use: Optional[xr.DataArray]
-    curve_point: Optional[xr.DataArray]
 
     def is_grid_on(self) -> bool:
         return bool(((self.settings.get("grid", {}) or {}).get("on_grid", False)))
@@ -119,12 +119,14 @@ def get_params(ds: xr.Dataset) -> Params:
     def _opt(name: str) -> Optional[xr.DataArray]:
         return ds[name] if name in ds.data_vars else None
 
-    curve_point = ds.coords["curve_point"] if "curve_point" in ds.coords else None
 
     return Params(
         settings=settings,
         load_demand=_opt("load_demand"),
         resource_availability=_opt("resource_availability"),
+        ambient_temperature=_opt("ambient_temperature"),
+        battery_ck_bands=_opt("battery_ck_bands"),
+        battery_calendar_rate_per_year=_opt("battery_calendar_rate_per_year"),
         scenario_weight=_opt("scenario_weight"),
         min_renewable_penetration=_opt("min_renewable_penetration"),
         max_lost_load_fraction=_opt("max_lost_load_fraction"),
@@ -161,6 +163,8 @@ def get_params(ds: xr.Dataset) -> Params:
         battery_discharge_efficiency=_opt("battery_discharge_efficiency"),
         battery_initial_soc=_opt("battery_initial_soc"),
         battery_initial_soh=_opt("battery_initial_soh"),
+        battery_end_of_life_soh=_opt("battery_end_of_life_soh"),
+        battery_cycle_lifetime_to_eol_cycles=_opt("battery_cycle_lifetime_to_eol_cycles"),
         battery_depth_of_discharge=_opt("battery_depth_of_discharge"),
         battery_max_charge_c_rate=_opt("battery_max_charge_c_rate"),
         battery_max_discharge_c_rate=_opt("battery_max_discharge_c_rate"),
@@ -187,8 +191,4 @@ def get_params(ds: xr.Dataset) -> Params:
         grid_availability=_opt("grid_availability"),
         grid_import_price=_opt("grid_import_price"),
         grid_export_price=_opt("grid_export_price"),
-        generator_eff_curve_rel_power=_opt("generator_eff_curve_rel_power"),
-        generator_eff_curve_eff=_opt("generator_eff_curve_eff"),
-        generator_fuel_curve_rel_fuel_use=_opt("generator_fuel_curve_rel_fuel_use"),
-        curve_point=curve_point,
     )

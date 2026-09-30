@@ -60,7 +60,6 @@ def initialize_vars(sets: xr.Dataset, data: xr.Dataset, model: lp.Model) -> Dict
     on_grid = p.is_grid_on()
     allow_export = p.is_grid_export_enabled()
     generator_on = p.is_generator_on()
-    partial_load_enabled = bool((p.settings.get("generator", {}) or {}).get("partial_load_modelling_enabled", False))
     battery_loss_model = normalize_battery_loss_model(
         ((p.settings.get("battery_model", {}) or {}).get("loss_model")),
         default="constant_efficiency",
