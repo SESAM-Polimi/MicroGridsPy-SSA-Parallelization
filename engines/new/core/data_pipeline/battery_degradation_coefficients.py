@@ -185,7 +185,7 @@ def implied_calendar_life(
     cycle_fade_per_year: float,
     usable_soh_budget: float,
     scale: float = 1.0,
-    min_years: float = 1.0,
+    min_years: float = 2.0,
     max_years: float = 40.0,
 ) -> float:
     """Years until calendar and cycle ageing together consume the usable SoH budget.
@@ -211,9 +211,33 @@ def implied_calendar_life(
         cal = float(scale) * float(calendar_fade_fraction(chemistry, mean_soc, temp, years)[0])
         return cal + years * cyc
 
+    # Clamping a sub-year or sub-two-year result would be worse than failing. At L = 1 every
+    # year becomes a commissioning year, so SoH resets annually, fade never accumulates, the
+    # end-of-life floor is trivially satisfied and the degradation model silently switches
+    # itself off -- while CAPEX amortises over a single year. The run would look plausible and
+    # be wrong, so these are hard errors instead.
+    first_year_fade = _fade(1.0)
+    if first_year_fade >= budget:
+        raise InputValidationError(
+            f"Battery degradation consumes the entire usable SoH budget within one year: "
+            f"{100.0 * first_year_fade:.1f} % against a budget of {100.0 * budget:.1f} % "
+            f"(initial_soh - end_of_life_soh), at a mean cell temperature of "
+            f"{float(mean_temperature_degc):.1f} degC with calendar_fade_scale={float(scale):.2f}. "
+            "No replacement interval can represent that. Check "
+            "battery.technical.enclosure_temperature_rise_c and calendar_fade_scale, and whether "
+            "this site needs active cooling to be viable at all."
+        )
     lo, hi = float(min_years), float(max_years)
     if _fade(lo) >= budget:
-        return lo
+        raise InputValidationError(
+            f"Battery implied service life is under {lo:.0f} years at a mean cell temperature of "
+            f"{float(mean_temperature_degc):.1f} degC (fade over {lo:.0f} y would be "
+            f"{100.0 * _fade(lo):.1f} % against a budget of {100.0 * budget:.1f} %). The annual "
+            "replacement model cannot represent a life that short: a one-year interval resets SoH "
+            "every year and disables the degradation state entirely. Reduce "
+            "battery.technical.enclosure_temperature_rise_c or calendar_fade_scale, or treat this "
+            "site as requiring a cooled enclosure."
+        )
     if _fade(hi) <= budget:
         return hi
     for _ in range(80):

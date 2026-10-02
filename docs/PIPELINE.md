@@ -263,6 +263,38 @@ profile. So deriving the life does not remove that uncertainty, it propagates it
 replacement schedule and therefore into cost -- which is more honest than hiding it behind a fixed
 number, but it makes the enclosure assumption the headline sensitivity of any study.
 
+### 4e. The three SoH guards
+
+Two different degeneracies can make a physically impossible site look like a valid run, so each is
+refused where it arises rather than left to surface as an LP infeasibility or a quiet wrong answer.
+
+**1. `implied_calendar_life` raises instead of clamping.** Its bisection used to clamp a result below
+its `min_years` bound. That was the worst available failure: `L = 1` makes every year a commissioning
+year, so SoH resets annually, fade never accumulates, the end-of-life floor is satisfied for free and
+the degradation state effectively switches itself off -- while CAPEX amortises over a single year.
+The run completes and looks plausible. Two hard errors now replace the clamp:
+  * fade in the first year alone >= the SoH budget -- no replacement interval can represent that;
+  * implied life < 2 years -- below the resolution of an annual replacement model.
+Both name the cell temperature and `calendar_fade_scale`. Reachable at roughly 48 degC cell with
+`calendar_fade_scale` 2.0, or 55 degC at 2.7.
+
+**2. End-of-life floor feasibility.** The binding year is a cohort's last, where
+`E_nom * [budget - r_cal*(L-1)] >= c * D * (L-1)` with `D` the discharge throughput (hard lower
+bound: dark-hour load must come from the battery when lost load is disallowed). So the LP is
+infeasible exactly when `r_cal*(L-1) >= budget`, and oversizing cannot relieve it because calendar
+fade and the floor both scale with nameplate. A **derived** life can never reach this -- it solves
+`fade(L) = budget`, so `r_cal*(L-1) < budget` by construction, and measurements across 20-60 degC sit
+at 0.26-0.40 of the budget. This check is therefore the validator for a hand-set
+`calendar_lifetime_years`, and its message names the right lever for whichever mode is active.
+
+**3. Warning band.** Just inside that boundary the required nameplate grows as
+`1/[budget - r_cal*(L-1)]`, i.e. hyperbolically, so results stay feasible but become hypersensitive to
+the enclosure and calendar assumptions. Above 70 % of the budget the run emits a `UserWarning` and
+records `calendar_fade_warning` alongside `calendar_fade_budget_fraction` in
+`settings.battery_model.degradation_model`, so a thousand-cluster sweep can be filtered for
+clusters in that regime. Example: a hand-set 10 y at a 45 degC cell site sits at 71 % and warns;
+20 y at the same site is refused outright.
+
 ---
 
 ## 5. Techno-economic setup and solve

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from functools import partial
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple
@@ -2122,29 +2123,54 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
                 reference_years=calendar_ref_years,
                 scale=calendar_scale,
             )
-            # Calendar fade and the end-of-life floor are both proportional to nameplate
-            # energy, so if calendar fade alone outruns the SoH budget over a cohort's life
-            # the LP is infeasible and no amount of oversizing helps. Catch it here, where
-            # we can say which input is inconsistent.
+            # Feasibility of the end-of-life floor. The binding year is a cohort's last, where
+            #     E_nom * [budget - r_cal*(L-1)]  >=  c * D * (L-1)
+            # with D the discharge throughput, which has a hard lower bound (dark-hour load must
+            # come from the battery when lost load is disallowed). So the LP is infeasible exactly
+            # when r_cal*(L-1) >= budget -- calendar fade and the floor both scale with nameplate,
+            # so oversizing cannot relieve it -- and just inside that boundary the required
+            # nameplate grows as 1/[budget - r_cal*(L-1)], i.e. hyperbolically. A derived life
+            # cannot reach this (it solves fade(L) = budget, so r_cal*(L-1) < budget by
+            # construction); this is the validator for a hand-set calendar_lifetime_years.
             _soh0 = float(battery_degradation_settings.get("initial_soh", 1.0))
             _soh_eol = battery_degradation_settings.get("end_of_life_soh", None)
             if _soh_eol is not None and np.isfinite(float(_soh_eol)):
                 _budget = _soh0 - float(_soh_eol)
-                _worst = float(np.nanmax(cal_rate)) * (calendar_ref_years - 1.0)
+                _r_cal = float(np.nanmax(cal_rate))
+                _worst = _r_cal * (calendar_ref_years - 1.0)
+                _headroom = _worst / _budget if _budget > 0.0 else float("inf")
+                battery_degradation_settings["calendar_fade_budget_fraction"] = float(_headroom)
                 if _worst >= _budget:
-                    _max_life = _budget / float(np.nanmax(cal_rate)) + 1.0
+                    _max_life = _budget / _r_cal + 1.0 if _r_cal > 0.0 else float("inf")
+                    _lever = (
+                        "Reduce battery.technical.enclosure_temperature_rise_c or "
+                        "calendar_fade_scale"
+                        if calendar_life_is_derived
+                        else "Lower battery.investment.*.calendar_lifetime_years to at most "
+                        f"{_max_life:.1f} y, or reduce "
+                        "battery.technical.enclosure_temperature_rise_c / calendar_fade_scale"
+                    )
                     raise InputValidationError(
                         "Battery calendar ageing alone exhausts the usable SoH budget before the "
-                        f"battery is replaced: {100.0 * float(np.nanmax(cal_rate)):.2f} %/yr over "
+                        f"battery is replaced: {100.0 * _r_cal:.2f} %/yr over "
                         f"{calendar_ref_years:.0f} y consumes {100.0 * _worst:.1f} % against a budget of "
                         f"{100.0 * _budget:.1f} % (initial_soh - end_of_life_soh). Cycle ageing and "
                         "oversizing cannot relieve this because both the fade and the end-of-life floor "
-                        "scale with nameplate energy. Lower battery.investment.*.calendar_lifetime_years "
-                        f"to at most {_max_life:.1f} y for this site's cell temperature "
-                        f"({float(t_bar_y.max()):.1f} degC mean, including a "
-                        f"{enclosure_rise:.1f} K enclosure rise), or reduce "
-                        "battery.technical.enclosure_temperature_rise_c / calendar_fade_scale."
+                        "scale with nameplate energy. Site cell temperature is "
+                        f"{float(t_bar_y.max()):.1f} degC mean, including a {enclosure_rise:.1f} K "
+                        f"enclosure rise. {_lever}."
                     )
+                if _headroom > 0.7:
+                    _msg = (
+                        f"Battery calendar fade consumes {100.0 * _headroom:.0f} % of the usable SoH "
+                        f"budget over a {calendar_ref_years:.0f} y life at "
+                        f"{float(t_bar_y.max()):.1f} degC mean cell temperature. The nameplate needed "
+                        "to keep the end-of-life floor grows as 1/(budget - calendar fade), so sizing "
+                        "becomes hypersensitive to the enclosure and calendar assumptions in this "
+                        "range. Treat the result as a sensitivity, not a design."
+                    )
+                    battery_degradation_settings["calendar_fade_warning"] = _msg
+                    warnings.warn(_msg, stacklevel=2)
         except BatteryCoefficientsInputValidationError as exc:
             raise InputValidationError(str(exc)) from exc
         data["battery_cycle_fade_coefficient"] = xr.DataArray(
