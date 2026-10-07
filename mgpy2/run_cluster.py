@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from mgpy2.archetypes import load_release
 from mgpy2.paths import ensure_engines_importable, repo_root, run_cwd
 from mgpy2.config_map import ThesisConfig, build_project
 
@@ -188,6 +189,7 @@ def _run_info(cfg: ThesisConfig, solver: str, solver_params: dict, status: str,
         "prep_seconds": None if prep_s is None else round(prep_s, 2),
         "solve_seconds": round(solve_s, 2),
         "pipeline_config": asdict(cfg),           # demand_growth_mode, costs, horizon...
+        "demand_archetypes": load_release().provenance(),   # version, DOI, file checksums
         "host": platform.node(),
         "sge_job_id": os.environ.get("JOB_ID"),
         "sge_task_id": os.environ.get("SGE_TASK_ID"),

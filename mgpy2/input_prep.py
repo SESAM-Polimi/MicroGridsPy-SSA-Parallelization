@@ -11,11 +11,13 @@ Three deliverables per cluster, written into `<project>/inputs/`:
                              ambient temperature in **degC** (PVGIS TMY T2m, the same
                              download as the solar series; typical year repeated).
 
-Faithful to the thesis pipeline (old run_nostreamlit_update.run_yaml):
-  * household + hospital demand via microgridspy.utils.archetypes.demand_calculation
-    (called with num_schools=0);
-  * school demand distributed separately via Data_sheet/School_weights.csv and the
-    per-row `school_total_demand`, grown year-on-year at `demand_growth`;
+Demand follows the thesis pipeline (old run_nostreamlit_update.run_yaml), with profiles
+from the archetype release v1.0.0 (mgpy2.archetypes, DOI 10.5281/zenodo.22832973) instead
+of the Excel copies in engines/old (three of which were wrong until Oct 2026):
+  * household + hospital demand: n/100 x household series, n x health-facility series;
+  * school demand: the release's school profile (normalised; equal to the former
+    Data_sheet/School_weights.csv within 5e-10) x the per-row `school_total_demand`,
+    grown year-on-year at `demand_growth`;
   * solar via microgridspy.utils.pvgis.download_pvgis_pv_data (its T2m series is also
     returned, `return_temperature=True`, so temperature costs no extra request).
 
@@ -34,7 +36,8 @@ from typing import List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-from mgpy2.paths import ensure_engines_importable, school_weights_csv
+from mgpy2.archetypes import TIERS, health_load_wh, household_load_wh, load_release, school_shape
+from mgpy2.paths import ensure_engines_importable
 
 PERIODS_PER_YEAR = 8760
 
@@ -90,11 +93,15 @@ def year_labels(start_year: int, years: int) -> List[str]:
 # =============================================================================
 def compute_demand_kwh(row: dict, cfg: PrepConfig,
                        weights_path: Optional[Path] = None) -> np.ndarray:
-    """Return an (periods, years) array of hourly demand in kWh."""
-    ensure_engines_importable()
-    from microgridspy.utils.archetypes import demand_calculation  # old engine
+    """Return an (periods, years) array of hourly demand in kWh.
 
+    Profiles come from the archetype release (mgpy2.archetypes). `weights_path` is a
+    legacy override for the school profile; by default the release's school series is used.
+    """
     periods, years = cfg.periods, cfg.years
+    if periods != PERIODS_PER_YEAR:
+        raise ValueError(f"archetype profiles are hourly ({PERIODS_PER_YEAR} periods), got {periods}.")
+    release = load_release()
     growth = cfg.demand_growth
 
     def _num(key, default=0):
@@ -113,36 +120,29 @@ def compute_demand_kwh(row: dict, cfg: PrepConfig,
     # internally; in consistent mode we suppress internal growth and grow uniformly.
     internal_growth = growth if faithful else 0.0
 
-    # --- household + hospital load (Wh); schools handled below ---
-    try:
-        load_total, _users = demand_calculation(
-            _num("lat"), str(cooling),
-            _num("h_tier1"), _num("h_tier2"), _num("h_tier3"), _num("h_tier4"), _num("h_tier5"),
-            0,  # schools handled via weights, exactly like the thesis pipeline
-            _num("hospital_1"), _num("hospital_2"), _num("hospital_3"), _num("hospital_4"), _num("hospital_5"),
-            internal_growth, years, periods,
-        )
-    except ValueError as e:
-        if "Total load is zero" in str(e):
-            load_total = pd.DataFrame(
-                0.0, index=range(periods), columns=[f"Year_{i+1}" for i in range(years)]
-            )
-        else:
-            raise
-
-    load_wh = load_total.to_numpy(dtype="float64")  # (periods, years)
-    if load_wh.shape != (periods, years):
-        raise ValueError(f"demand_calculation returned {load_wh.shape}, expected {(periods, years)}")
+    # --- household + hospital load (Wh), year 1; schools handled below ---
+    year1_wh = (
+        household_load_wh(release, lat=_num("lat"), cooling=str(cooling),
+                          households_by_tier=[_num(f"h_tier{t}") for t in TIERS])
+        + health_load_wh(release, facilities_by_tier=[_num(f"hospital_{t}") for t in TIERS])
+    )
+    # Years 2..N. Faithful mode reproduces engines/old apply_demand_growth exactly: it divides
+    # the rate by 100 (YAML 0.03 => 0.03 %/yr) and compounds column by column. Consistent mode
+    # passes internal_growth = 0 here and grows the whole demand uniformly further down.
+    load_wh = np.empty((periods, years), dtype="float64")
+    load_wh[:, 0] = year1_wh
+    for y in range(1, years):
+        load_wh[:, y] = load_wh[:, y - 1] * (1 + internal_growth / 100)
 
     # --- school demand (Wh) distributed by weights profile ---
     school_total = _num("school_total_demand", 0.0)
     if school_total != 0.0:
-        wpath = Path(weights_path) if weights_path else school_weights_csv()
-        weights = pd.to_numeric(pd.read_csv(wpath)["weights"], errors="coerce").to_numpy()
+        if weights_path:   # legacy override, e.g. to reproduce a run made with School_weights.csv
+            weights = pd.to_numeric(pd.read_csv(weights_path)["weights"], errors="coerce").to_numpy()
+        else:
+            weights = school_shape(release)
         if weights.shape[0] != periods:
-            raise ValueError(
-                f"School_weights.csv has {weights.shape[0]} rows, expected {periods}."
-            )
+            raise ValueError(f"school profile has {weights.shape[0]} rows, expected {periods}.")
         profile = weights * school_total  # per-hour Wh, sums to school_total in year 1
         school_wh = np.empty((periods, years), dtype="float64")
         for y in range(years):

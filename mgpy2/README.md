@@ -1,16 +1,17 @@
 # mgpy2 — SSA parallelization on the NEW MicroGridsPy engine
 
 `mgpy2` re-implements the thesis cluster-parallelization workflow on the updated
-engine (`engines/new/`, package `core.*`), reusing the OLD engine's
-(`engines/old/`, package `microgridspy.*`) archetype demand and PVGIS solar code
-as a preprocessing library.
+engine (`engines/new/`, package `core.*`). Demand profiles come from the published
+archetype release (`data/archetypes/v1.0.0/`, DOI 10.5281/zenodo.22832973, read by
+`mgpy2.archetypes`); the OLD engine (`engines/old/`, package `microgridspy.*`) is still
+used for the PVGIS solar download.
 
 ## Pipeline (per cluster)
 ```
 sample row ($SAMPLE_CSV; task N = row N via mgpy2.sample)
    -> config_map.build_project        # formulation.json + split YAMLs (write_templates + patched values)
    -> input_prep.write_demand_and_resource
-        demand:   microgridspy.utils.archetypes.demand_calculation  (+ School_weights)  -> load_demand.csv (kWh)
+        demand:   mgpy2.archetypes (release v1.0.0, checksum-verified)          -> load_demand.csv (kWh)
         solar:    microgridspy.utils.pvgis.download_pvgis_pv_data    -> resource_availability.csv (capacity factor)
                                                                   + ambient_temperature.csv (PVGIS T2m, degC)
    -> run_cluster: MultiYearModel(project).solve_single_objective(highs)
