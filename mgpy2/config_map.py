@@ -92,9 +92,10 @@ class ThesisConfig:
     battery_max_discharge_c_rate: float = 1.0 / 4.0  # THESIS-MAP: 1 / max discharge time (4 h)
 
     # Li-ion degradation (pre-fitted coefficients, temperature-driven).
-    # Defaults: LFP stationary cell, 6000 cycles to 80 % SoH. NOTE the shipped c(T) shape is
-    # calibrated at FULL DoD (layer1 test_DOD = 1.0), so at DoD 0.8 it delivers ~7370 cycles
-    # rather than 6000; NMC reference is 2500.
+    # Defaults: LFP stationary cell, 6000 cycles to 80 % SoH (an NMC datasheet would quote
+    # ~2500). The shipped c(T) SHAPE comes from a full-DoD layer-I fit, but the MAGNITUDE is
+    # re-pinned at the reference conditions below, so the rated count is delivered exactly
+    # there: 6000 cycles at DoD 0.8 / 25 degC take the cell from initial to end-of-life SoH.
     battery_degradation_coefficients: bool = True
     battery_chemistry: str = "LFP"                      # "LFP" | "NMC"
     battery_cycle_lifetime_to_eol_cycles: float = 6000.0
@@ -109,9 +110,13 @@ class ThesisConfig:
     # a ventilated but unconditioned battery room; use ~20 K for a sealed container in full sun
     # and 0 for active cooling. A design assumption, not a fitted value -- worth a sensitivity.
     battery_enclosure_temperature_rise_c: float = 10.0
-    # Multiplier on the empirical calendar-fade law. 1.0 = the published Ali et al. (2023) fit
-    # (about 2.1 %/yr at 25 degC cell, mean SoC 0.6); ~0.4 matches the 10-year LFP shelf-ageing
-    # measurement. The literature spread is 2.7x, so report both ends.
+    # Multiplier on the empirical calendar-fade law. 1.0 = the ANCHORED model: the Ali et al.
+    # (2023) shape renormalised onto the 10-year LFP shelf-ageing measurement (for LFP; NMC has
+    # no anchor, so there 1.0 is the raw fit). The LP carries one rate per year while the law is
+    # sub-linear in time, so the linearised rate depends on the horizon it is averaged over --
+    # the derived calendar lifetime: at 25 degC cell / mean SoC 0.6 it is ~0.85 %/yr over 8 y,
+    # ~0.76 %/yr over 10 y. ~2.72 recovers the unscaled Ali envelope (the pessimistic end of the
+    # 2.7x literature spread), so report both ends.
     battery_calendar_fade_scale: float = 1.0
     # "convex_loss_epigraph" = power-dependent conversion loss (required by the fade LP);
     # "constant_efficiency" = flat one-way efficiencies (degradation must then be off).
