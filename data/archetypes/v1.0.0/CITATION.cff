@@ -1,0 +1,53 @@
+cff-version: 1.2.0
+message: "If you use this dataset, please cite it as below, together with the method paper."
+title: "Load-demand archetypes for rural users in Sub-Saharan Africa: households, health facilities and schools (RAMP inputs and time series)"
+type: dataset
+version: 1.0.0
+doi: 10.5281/zenodo.22832973
+date-released: 2026-09-18
+license: CC-BY-4.0
+authors:
+  - family-names: Stevanato
+    given-names: Nicolò
+    affiliation: "Politecnico di Milano, Department of Energy"
+    orcid: "https://orcid.org/0000-0002-3419-0389"
+keywords:
+  - load profiles
+  - electricity demand
+  - rural electrification
+  - Sub-Saharan Africa
+  - mini-grids
+  - RAMP
+  - health facilities
+  - archetypes
+references:
+  - type: conference-paper
+    title: "Archetypes of Rural Users in Sub-Saharan Africa for Load Demand Estimation"
+    authors:
+      - family-names: Stevanato
+        given-names: Nicolò
+      - family-names: Sangiorgio
+        given-names: Ivan
+      - family-names: Mereu
+        given-names: Riccardo
+      - family-names: Colombo
+        given-names: Emanuela
+    year: 2023
+    conference:
+      name: "2023 IEEE PES/IAS PowerAfrica"
+    doi: 10.1109/POWERAFRICA57932.2023.10363287
+  - type: article
+    title: "Generating high-resolution multi-energy load profiles for remote areas with an open-source stochastic model"
+    authors:
+      - family-names: Lombardi
+        given-names: Francesco
+      - family-names: Balderrama
+        given-names: Sergio
+      - family-names: Quoilin
+        given-names: Sylvain
+      - family-names: Colombo
+        given-names: Emanuela
+    year: 2019
+    journal: Energy
+    volume: 177
+    doi: 10.1016/j.energy.2019.04.097

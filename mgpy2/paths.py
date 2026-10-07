@@ -69,6 +69,13 @@ def school_weights_csv() -> Path:
     return data_sheet_dir() / "School_weights.csv"
 
 
+def archetypes_dir(version: str) -> Path:
+    """Folder of one published demand-archetype release, e.g. <repo>/data/archetypes/v1.0.0."""
+    env = os.environ.get("MGPY2_ARCHETYPES_DIR")
+    base = Path(env).resolve() if env else (repo_root() / "data" / "archetypes")
+    return base / f"v{version}"
+
+
 def ensure_engines_importable() -> None:
     """Put both engine directories on sys.path (idempotent)."""
     for d in (new_engine_dir(), old_engine_dir()):
