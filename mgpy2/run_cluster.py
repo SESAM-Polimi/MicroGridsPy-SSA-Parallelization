@@ -18,6 +18,7 @@ That makes local (ProcessPool) and HPC (SGE task) runs behave identically.
 """
 from __future__ import annotations
 
+import json
 import os
 import platform
 import subprocess
@@ -177,8 +178,46 @@ def _solver_version(solver: str) -> str:
     return "unknown"
 
 
+# Battery-ageing values the engine works out per cluster while loading the data
+# (engines/new/core/multi_year_model/data.py -> settings.battery_model.degradation_model).
+# They live only in memory during the run; with the life derived per cluster, each
+# summary.json must keep its own. Fields absent in a run (e.g. ageing switched off,
+# or a hand-set life) are simply left out.
+BATTERY_DEGRADATION_FIELDS = (
+    "coefficients_enabled",
+    "chemistry",
+    "calendar_lifetime_mode",                    # "derived" | "user"
+    "calendar_lifetime_years_derived",           # root of the fade budget, before flooring
+    "calendar_lifetime_years_used",              # whole years: replacement interval and CRF
+    "mean_cell_temperature_c",                   # PVGIS air temperature + enclosure rise
+    "assumed_equivalent_full_cycles_per_year",
+    "assumed_cycle_fade_per_year",
+    "discharge_weighted_cycle_fade_coefficient",
+    "calendar_fade_budget_fraction",             # > 0.70 triggers the engine's warning
+    "calendar_fade_warning",
+    "cycle_lifetime_to_eol_cycles",
+    "end_of_life_soh",
+    "cycle_life_scaling",
+)
+
+
+def _battery_degradation_info(data) -> dict:
+    """Copy the per-cluster battery-ageing values out of the engine's data settings."""
+    settings = (getattr(data, "attrs", None) or {}).get("settings") or {}
+    if isinstance(settings, str):                # defensive: some engine versions serialise it
+        settings = json.loads(settings)
+    dm = (settings.get("battery_model") or {}).get("degradation_model") or {}
+    out = {}
+    for key in BATTERY_DEGRADATION_FIELDS:
+        if key in dm and dm[key] is not None:
+            value = dm[key]
+            # numpy scalars are not JSON-serialisable; keep plain Python types
+            out[key] = value.item() if hasattr(value, "item") else value
+    return out
+
+
 def _run_info(cfg: ThesisConfig, solver: str, solver_params: dict, status: str,
-              prep_s: Optional[float], solve_s: float) -> dict:
+              prep_s: Optional[float], solve_s: float, data=None) -> dict:
     """Everything needed later to say HOW a summary.json was produced."""
     return {
         "code_version": code_version(),
@@ -190,6 +229,7 @@ def _run_info(cfg: ThesisConfig, solver: str, solver_params: dict, status: str,
         "solve_seconds": round(solve_s, 2),
         "pipeline_config": asdict(cfg),           # demand_growth_mode, costs, horizon...
         "demand_archetypes": load_release().provenance(),   # version, DOI, file checksums
+        "battery_degradation": _battery_degradation_info(data),   # derived life, cell T, ...
         "host": platform.node(),
         "sge_job_id": os.environ.get("JOB_ID"),
         "sge_task_id": os.environ.get("SGE_TASK_ID"),
@@ -257,7 +297,8 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
             getattr(model.model, "solution", None), out_dir=paths.results_dir,
             profile=cfg.export_profile, dispatch_format=cfg.dispatch_format,
             status=status, solver=solver,
-            run_info=_run_info(cfg, solver, solver_params or {}, status, prep_s, solve_s),
+            run_info=_run_info(cfg, solver, solver_params or {}, status, prep_s, solve_s,
+                               data=model.data),
         )
         lcoe = _read_lcoe(paths.results_dir)
         return RunResult(cat, "ok", objective=float(obj) if obj is not None else None, lcoe=lcoe)
