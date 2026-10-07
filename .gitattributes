@@ -3,3 +3,6 @@
 *.zip binary
 *.png binary
 *.pdf binary
+
+# Published data releases are pinned by SHA256SUMS: git must store them byte for byte.
+data/archetypes/** -text
