@@ -52,7 +52,7 @@ All energies are kWh, all powers kW, all temperatures °C unless marked K, all f
 | `s` | `scenario` | stochastic scenario, weight `w_s`, `Σ w_s = 1` |
 | `k` | `inv_step` | investment step (cohort of installed capacity) |
 | `r` | `resource` | renewable resource (Solar) |
-| `g` | `battery_loss_segment` | piecewise segment of the conversion-loss epigraph |
+| `g` | `battery_loss_segment` | piecewise segment of the conversion-loss epigraph (`convex_loss_epigraph` only) |
 
 ### 2.2 Decision variables (battery, coefficients mode)
 
@@ -62,14 +62,18 @@ All energies are kWh, all powers kW, all temperatures °C unless marked K, all f
 | `P_inv` | `battery_inverter_power` | k | kW | ≥ 0 | installed battery-inverter power |
 | `P_ch` | `battery_charge` | t,y,s,k | kWh/h | ≥ 0 | AC-side charge |
 | `P_dis` | `battery_discharge` | t,y,s,k | kWh/h | ≥ 0 | AC-side discharge |
-| `P_ch^dc` | `battery_charge_dc` | t,y,s,k | kWh/h | ≥ 0 | DC-side (internal) charge |
-| `P_dis^dc` | `battery_discharge_dc` | t,y,s,k | kWh/h | ≥ 0 | DC-side (internal) discharge |
-| `L_ch` | `battery_charge_loss` | t,y,s,k | kWh/h | ≥ 0 | charge conversion loss |
-| `L_dis` | `battery_discharge_loss` | t,y,s,k | kWh/h | ≥ 0 | discharge conversion loss |
+| `P_ch^dc` | `battery_charge_dc` | t,y,s,k | kWh/h | ≥ 0 | DC-side (internal) charge, epigraph only |
+| `P_dis^dc` | `battery_discharge_dc` | t,y,s,k | kWh/h | ≥ 0 | DC-side (internal) discharge, epigraph only |
+| `L_ch` | `battery_charge_loss` | t,y,s,k | kWh/h | ≥ 0 | charge conversion loss, epigraph only |
+| `L_dis` | `battery_discharge_loss` | t,y,s,k | kWh/h | ≥ 0 | discharge conversion loss, epigraph only |
 | `S` | `battery_soc` | t,y,s,k | kWh | ≥ 0 | stored energy |
 | `E` | `battery_effective_energy_capacity` | y,s,k | kWh | ≥ 0 | **usable energy state** |
 | `F^cyc` | `battery_cycle_fade` | y,s,k | kWh/yr | ≥ 0 | annual capacity lost to cycling |
 | `F^cal` | `battery_calendar_fade` | y,k | kWh/yr | ≥ 0 | annual capacity lost to calendar ageing |
+
+With `loss_model = constant_efficiency` (the SSA pipeline default) the four epigraph-only rows are
+not variables: `P_ch^dc` and `P_dis^dc` are the linear expressions `η_ch · P_ch` and `P_dis / η_dis`
+(§4.3).
 
 Sixty variables in total for the degradation layer at Y = 20, one scenario, one step
 (3 × 20). The whole degradation layer costs **60 variables and 101 constraints** on top of a
@@ -82,7 +86,7 @@ model with no degradation at all — measured, see §10.
 | `c(T_t)` | `battery_cycle_fade_coefficient` | t,y,s | kWh lost per kWh discharged | marginal cycle-fade cost |
 | `r_cal` | `battery_calendar_rate_per_year` | y | 1/yr | linear-equivalent calendar fade rate |
 | `T_t^amb` | `ambient_temperature` | t,y,s | °C | PVGIS outdoor air temperature |
-| `a_g, b_g` | `battery_charge_loss_slope/intercept` | g | – | conversion-loss epigraph segments |
+| `a_g, b_g` | `battery_charge_loss_slope/intercept` | g | – | conversion-loss epigraph segments (epigraph only) |
 
 ### 2.4 Scalar parameters
 
@@ -288,8 +292,9 @@ the whole module — see §9.2. At a 25 °C ambient site the derived service lif
 
 ### 3.4 Conversion losses (`battery_efficiency_curve.csv`)
 
-Required whenever degradation is active, because throughput must be defined on the internal DC
-powers. The CSV holds `relative_power_pu` and two columns interpreted as **normalised multipliers on
+Used only with `battery_model.loss_model = convex_loss_epigraph`. Degradation no longer needs it:
+the cycle-fade throughput only needs the DC-side discharge, which the constant-efficiency model
+also defines (§4.3). The CSV holds `relative_power_pu` and two columns interpreted as **normalised multipliers on
 the YAML base efficiencies** (the last row must be 1.0):
 
 ```
@@ -348,10 +353,37 @@ P_inv ≤ ρ_dis · U · E_unit                                       (C7)
 Σ_k U_k · E_unit ≤ E_max                                         (C8)
 ```
 
+(C4)–(C5) exist only with the epigraph; with constant efficiency the DC flows are fixed multiples
+of the AC flows, so (C2)–(C3) already bound them.
+
 **Note:** (C6)–(C7) tie inverter power to **nameplate**, not to the faded state. Power capability
 therefore does not degrade — see limitation §9.5.
 
-### 4.3 AC/DC coupling and the convex loss epigraph
+### 4.3 AC/DC coupling: constant efficiency (default) or convex loss epigraph
+
+Every constraint below that uses `P_ch^dc` or `P_dis^dc` — the cycle fade (D4) and the state of
+charge (C13), (C15) — is written on the energy entering and leaving the cells. The loss model only
+decides how those two flows relate to the AC-side variables.
+
+**Constant efficiency** (`loss_model = constant_efficiency`, SSA pipeline default):
+
+```
+P_ch^dc  = η_ch · P_ch                                          (C9')
+P_dis^dc = P_dis / η_dis                                        (C10')
+```
+
+These are substituted as linear expressions, so the model has no DC variables, no loss variables
+and no (C4)–(C5), (C11)–(C12). With degradation off this is exactly the September 2026 battery
+model. With degradation on, the ageing layer (§4.4) is the only addition.
+
+Why it is the default: on four Ethiopian clusters at production settings (Gurobi 1 thread,
+barrier + crossover, 8760 h × 20 y) the epigraph made the model about 3× larger in constraints and
+non-zeros, the solve 10–20× slower (829–2,479 s against 73–121 s) and peak memory about 2.5×
+(5.3–6.5 GB against 2.3 GB). That is not affordable for ~410,000 SSA clusters. The power
+dependence of efficiency is expected to be a second-order effect on sizing and cost; the same
+four clusters, solved with both loss models, are the check.
+
+**Convex loss epigraph** (`loss_model = convex_loss_epigraph`):
 
 ```
 P_ch  = P_ch^dc  + L_ch                                          (C9)
@@ -628,9 +660,10 @@ refused with "lower to at most 19.1 y".
 | `enclosure_temperature_rise_c` | 10 | K | outdoor air → enclosure air | 0 cooled · 5–10 ventilated · 15–20 sealed in sun. **Run as a sensitivity** |
 | `calendar_fade_scale` | 1.0 | – | walks the 2.7× literature band | 1.0 anchored (central) · 2.72 unscaled Ali (pessimistic). Report both |
 
-Plus `formulation.json → battery_model.degradation_model.coefficients_enabled` (master switch) and
-`battery_model.loss_model = convex_loss_epigraph` (**required**: throughput must be defined on DC
-powers).
+Plus `formulation.json → battery_model.degradation_model.coefficients_enabled` (master switch).
+`battery_model.loss_model` can be `constant_efficiency` (SSA pipeline default) or
+`convex_loss_epigraph`; the coefficient model works with both (§4.3). Only the legacy flat
+`cycle_fade_enabled` / `calendar_fade_enabled` scheme still requires the epigraph.
 
 ### 7.2 Economics (`battery.yaml → battery.investment.by_step.*`)
 
@@ -713,7 +746,8 @@ powers).
 5. **Power capability does not degrade.** (C6)–(C7) reference nameplate, so an aged battery is
    weaker in energy but just as strong in power. Real cells lose both through resistance growth.
 6. **No round-trip efficiency degradation.** Internal resistance growth is not modelled, so
-   conversion losses are constant over life.
+   conversion losses are constant over life. In the SSA default they are also constant with
+   power (`η_ch = η_dis = 0.9` at any C-rate, §4.3).
 7. **No SoC-dependent calendar fade in the LP.** A PV battery sits near full charge for much of the
    dry season, which the fixed `1 − δ/2` under-represents.
 8. **One field for two concepts.** `calendar_lifetime_years` cannot express a contractual
@@ -735,7 +769,8 @@ powers).
 ## 10. Worked example — reference cluster
 
 BDI cluster 1, 8760 h × 20 y, one scenario, PV + LFP battery, no generator, zero lost load.
-Gurobi 13 barrier, 8 threads, `Method=2 Crossover=0`.
+Gurobi 13 barrier, 8 threads, `Method=2 Crossover=0`. Computed with `loss_model =
+convex_loss_epigraph`, before constant efficiency became the pipeline default (§4.3).
 
 **Inputs.** 25 °C mean ambient, +10 K enclosure → **35 °C mean cell**. LFP, 6000 cycles @ 80 % DoD /
 25 °C, `SoH₀ = 1.0`, `SoH_eol = 0.8`, `φ_cal = 1.0`, `calendar_lifetime_years: null`.

@@ -118,9 +118,12 @@ class ThesisConfig:
     # ~0.76 %/yr over 10 y. ~2.72 recovers the unscaled Ali envelope (the pessimistic end of the
     # 2.7x literature spread), so report both ends.
     battery_calendar_fade_scale: float = 1.0
-    # "convex_loss_epigraph" = power-dependent conversion loss (required by the fade LP);
-    # "constant_efficiency" = flat one-way efficiencies (degradation must then be off).
-    battery_loss_model: str = "convex_loss_epigraph"
+    # "constant_efficiency" = fixed one-way efficiencies (charge/discharge above), with or
+    #   without ageing. Same battery model as the September 2026 run when ageing is off.
+    # "convex_loss_epigraph" = power-dependent conversion loss. Adds four hourly variables
+    #   and the piecewise loss rows: ~3x the constraints and 10-20x the Gurobi time on our
+    #   clusters, so not used for SSA runs (docs/BATTERY_DEGRADATION.md section 4.3).
+    battery_loss_model: str = "constant_efficiency"
 
     # --- optional system extensions (NOT required for feasibility) --------------
     # A pure PV+battery, off-grid, zero-lost-load system (the thesis design) is

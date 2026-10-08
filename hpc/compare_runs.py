@@ -8,13 +8,22 @@ Typical use (repo root on the cluster, after a test run on the comparison set):
         --ref  compare/20260917/compare_table.csv \
         --out  compare/20261007_battery_vs_sep.csv
 
+Any table with the same columns works as reference, e.g. the September sweep of all of
+Ethiopia (eth_sep2026_results.csv: cat, npc, lcoe, served_energy_disc_kwh, cap_solar,
+cap_battery, solve_s). The reference can also be another run's projects folder, to compare
+two test runs directly:
+
+    python hpc/compare_runs.py \
+        --new  bench/20261008_ageing_const/projects \
+        --ref  bench/20261007_battery_mem/projects
+
 What it does
   1. Reads every <new>/<cluster>/results/summary.json (one per solved cluster) and lists
      clusters that have an error.txt instead.
   2. Takes NPC, LCOE, discounted served energy, PV and battery capacity and solve time
      from each summary.
-  3. Joins them with the reference table on the cluster id (`cat`) and writes the ratios
-     new / reference.
+  3. Joins them with the reference (table or folder) on the cluster id (`cat`) and writes
+     the ratios new / reference.
   4. Prints a short report: missing clusters, a demand sanity check, and the ratio ranges
      by cluster type.
 
@@ -82,8 +91,19 @@ def collect(new_dir: Path) -> tuple[pd.DataFrame, dict[str, str]]:
     return new, errors
 
 
+def load_reference(ref: Path) -> pd.DataFrame:
+    """Reference results with the common column names: a compare_table.csv or a projects folder."""
+    if ref.is_dir():
+        table, _ = collect(ref)
+        if table.empty:
+            sys.exit(f"no summary.json under {ref}/*/results/")
+        return table
+    return pd.read_csv(ref).rename(columns=REF_COLUMNS)
+
+
 def compare(new: pd.DataFrame, ref: pd.DataFrame) -> pd.DataFrame:
-    ref = ref.rename(columns=REF_COLUMNS)[["cat"] + METRICS]
+    """Left join on the reference clusters; `ref` already uses the common column names."""
+    ref = ref[["cat"] + METRICS]
     both = ref.merge(new, on="cat", how="left", suffixes=("_ref", "_new"))
     for m in METRICS:
         both[f"{m}_ratio"] = pd.to_numeric(both[f"{m}_new"], errors="coerce") / pd.to_numeric(
@@ -98,7 +118,9 @@ def report(both: pd.DataFrame, errors: dict[str, str]) -> None:
           f"with error.txt: {len(errors)}")
     pending = [c for c in both.loc[~solved, "cat"] if c not in errors]
     if pending:
-        print(f"no result yet ({len(pending)}):", ", ".join(pending))
+        # A whole-country reference (e.g. eth_sep2026_results.csv) leaves thousands pending.
+        shown = ", ".join(pending[:10]) + (" ..." if len(pending) > 10 else "")
+        print(f"no result yet ({len(pending)}):", shown)
     if errors:
         # Group identical messages: one cause usually explains many failures.
         print("errors, grouped by message:")
@@ -127,7 +149,8 @@ def report(both: pd.DataFrame, errors: dict[str, str]) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--new", required=True, type=Path, help="projects folder of the new run")
-    ap.add_argument("--ref", required=True, type=Path, help="reference table (compare_table.csv)")
+    ap.add_argument("--ref", required=True, type=Path,
+                    help="reference: compare_table.csv, or the projects folder of another run")
     ap.add_argument("--out", type=Path, help="write the joined table here (CSV)")
     args = ap.parse_args(argv)
 
@@ -136,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     new, errors = collect(args.new)
     if new.empty and not errors:
         sys.exit(f"no summary.json or error.txt under {args.new}/*/results/")
-    both = compare(new, pd.read_csv(args.ref))
+    both = compare(new, load_reference(args.ref))
     report(both, errors)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
