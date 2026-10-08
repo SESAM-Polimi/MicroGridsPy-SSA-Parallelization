@@ -63,6 +63,9 @@ def read_summary(path: Path) -> dict:
         "bat_kwh": bat,
         "solve_s": run.get("solve_seconds"),
         "code_version": run.get("code_version"),
+        # present only for runs with the battery-ageing model (summary.json from PR "export battery life")
+        "bat_life_y": (run.get("battery_degradation") or {}).get("calendar_lifetime_years_used"),
+        "cell_temp_c": (run.get("battery_degradation") or {}).get("mean_cell_temperature_c"),
     }
 
 
@@ -70,7 +73,7 @@ def collect(new_dir: Path) -> tuple[pd.DataFrame, dict[str, str]]:
     """All summaries under new_dir, plus {cluster: first line of error.txt} for failures."""
     rows = [read_summary(p) for p in sorted(new_dir.glob("*/results/summary.json"))]
     # An empty run must still have the columns, or the merge below has nothing to join on.
-    new = pd.DataFrame(rows, columns=["cat"] + METRICS + ["code_version"])
+    new = pd.DataFrame(rows, columns=["cat"] + METRICS + ["code_version", "bat_life_y", "cell_temp_c"])
     errors = {}
     for p in sorted(new_dir.glob("*/results/error.txt")):
         if not (p.parent / "summary.json").exists():
