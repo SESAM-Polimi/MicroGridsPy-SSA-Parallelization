@@ -192,24 +192,29 @@ def initialize_vars(sets: xr.Dataset, data: xr.Dataset, model: lp.Model) -> Dict
             coords={"period": period, "year": year, "scenario": scenario, "inv_step": inv_step},
             name="battery_discharge_loss",
         )
-        if coefficients_enabled:
-            ysk = ("year", "scenario", "inv_step")
-            ysk_coords = {"year": year, "scenario": scenario, "inv_step": inv_step}
-            # Annual capacity lost per cohort [kWh]. Cycle fade is sum_t c(T_t) * DC
-            # discharge; calendar fade is r_cal(T_bar_y) * nameplate. The two add.
-            vars["battery_cycle_fade"] = model.add_variables(
-                lower=0.0, dims=ysk, coords=ysk_coords, name="battery_cycle_fade"
-            )
-            vars["battery_calendar_fade"] = model.add_variables(
-                lower=0.0,
-                dims=("year", "inv_step"),
-                coords={"year": year, "inv_step": inv_step},
-                name="battery_calendar_fade",
-            )
-            vars["battery_effective_energy_capacity"] = model.add_variables(
-                lower=0.0, dims=ysk, coords=ysk_coords, name="battery_effective_energy_capacity"
-            )
-        elif degradation_state_enabled:
+    if coefficients_enabled:
+        # Yearly ageing state, independent of the loss model: it only needs the energy
+        # leaving the cells, which constraints.py takes from the DC variables above
+        # (convex_loss_epigraph) or from P_dis / eta_d (constant_efficiency).
+        ysk = ("year", "scenario", "inv_step")
+        ysk_coords = {"year": year, "scenario": scenario, "inv_step": inv_step}
+        # Annual capacity lost per cohort [kWh]. Cycle fade is sum_t c(T_t) * DC
+        # discharge; calendar fade is r_cal(T_bar_y) * nameplate. The two add.
+        vars["battery_cycle_fade"] = model.add_variables(
+            lower=0.0, dims=ysk, coords=ysk_coords, name="battery_cycle_fade"
+        )
+        vars["battery_calendar_fade"] = model.add_variables(
+            lower=0.0,
+            dims=("year", "inv_step"),
+            coords={"year": year, "inv_step": inv_step},
+            name="battery_calendar_fade",
+        )
+        vars["battery_effective_energy_capacity"] = model.add_variables(
+            lower=0.0, dims=ysk, coords=ysk_coords, name="battery_effective_energy_capacity"
+        )
+    elif battery_loss_model == CONVEX_LOSS_EPIGRAPH:
+        # Legacy flat cycle/calendar scheme: hourly cycle fade, defined on the DC variables.
+        if degradation_state_enabled:
             vars["battery_cycle_fade"] = model.add_variables(
                 lower=0.0,
                 dims=("period", "year", "scenario", "inv_step"),

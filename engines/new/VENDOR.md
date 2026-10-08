@@ -35,6 +35,13 @@ is compute-only; all post-processing and visualization happen offline.
   charge was identically zero), calendar and cycle fade add in the capacity state instead of taking a
   min, and a new `battery_effective_energy_capacity_end_of_life` floor makes the rated cycle life
   binding. See `docs/PIPELINE.md` §4c.
+- **Battery ageing works with constant efficiency** (`multi_year_model/variables.py`,
+  `constraints.py`). The coefficient-based degradation layer no longer requires
+  `loss_model='convex_loss_epigraph'`: the SoC balance, year links and cycle-fade throughput are
+  written on DC-side flows that are either the epigraph variables or the expressions
+  `eta_c * P_ch` and `P_dis / eta_d`. The SSA pipeline default is now constant efficiency (the
+  epigraph made Gurobi 10-20x slower). The legacy `cycle_fade_enabled`/`calendar_fade_enabled`
+  scheme still requires the epigraph. See `docs/BATTERY_DEGRADATION.md` §4.3.
 - **Replaced upstream's calendar-ageing coefficients.** Upstream evaluates a hard-coded per-hour
   cubic in ambient temperature (which also disagrees by about 6x with the `alpha_poly` in its own
   JSON) giving 0.05 %/yr at 25 degC, i.e. a 386-year calendar life. Here calendar fade uses the
