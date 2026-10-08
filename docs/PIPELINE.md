@@ -229,20 +229,27 @@ night, hence
 equivalent full cycles per year = (annual dark-hour load) x end_of_life_soh / (95th-percentile night)
 ```
 
+With growing demand the nameplate is sized for the design night of the last year its investment
+step serves (year 20 without capacity expansion), so each year's dark-hour load is divided by that
+year's night and the result is averaged over the horizon (`cycling_estimate = horizon_mean`, the
+default). The original first-year ratio (`cycling_estimate = first_year`) equals the sizing-year
+peak when all users grow at one rate; at 3 %/yr the horizon mean is 0.77 x that peak.
+docs/BATTERY_DEGRADATION.md §5.3 has the derivation.
+
 The absolute sizing cancels, which is what makes this computable without the LP. The
 `end_of_life_soh` factor accounts for the battery having to carry that night while degraded, which is
 the condition a planner sizes for; omitting it understates the nameplate and so overstates cycling by
 about `1/SoH_eol`. `c(T)` is then averaged with the dark-hour load as weights rather than flat over
 the year, because discharge happens in the cool hours.
 
-Validated against a solved LP on the BDI cluster, which the estimator never sees: 271 cycles/yr
+Validated (first-year ratio) against a solved LP on the BDI cluster, which the estimator never sees: 271 cycles/yr
 against ~265 realised, cycle fade 1.427 against 1.394 %/yr, implied life **7.32 y against 7.57 y
 realised (3.3 %)**. Across sites it gives 9.6 y at a 30 degC cell, 7.3 y at 35, 4.2 y at 45 and
 3.2 y at 50.
 
 Every assumption behind a derived value is written into
 `settings.battery_model.degradation_model` (`calendar_lifetime_mode`,
-`calendar_lifetime_years_derived`, `calendar_lifetime_years_used`,
+`calendar_lifetime_years_derived`, `calendar_lifetime_years_used`, `cycling_estimate`,
 `assumed_equivalent_full_cycles_per_year`, `assumed_cycle_fade_per_year`,
 `discharge_weighted_cycle_fade_coefficient`, `mean_cell_temperature_c`) so each cluster's assumed
 life is reportable.

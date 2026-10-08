@@ -523,12 +523,34 @@ decision, so it must be assumed. It is estimated from the load and irradiance pr
 
 ```
 dark hours        : H = { t : Σ_r availability_{r,t} ≤ 10⁻⁹ }
-annual dark load  : Λ = Σ_{t∈H} D_t
-design night      : Δ = 95th percentile of daily dark-hour load
-cycles per year   : n_EFC = Λ · SoH_eol / Δ                                   (E2)
-weighted coeff.   : c̄ = Σ_{t∈H} c(T_t)·D_t / Σ_{t∈H} D_t                      (E3)
+annual dark load  : Λ_y = Σ_{t∈H} D_{t,y}
+design night      : Δ_y = 95th percentile of daily dark-hour load in year y
+sizing year       : s(y) = last year of the investment step serving year y
+                           (year Y for a single up-front investment)
+cycles per year   : n_EFC = mean_y [ Λ_y · SoH_eol / Δ_{s(y)} ]              (E2)
+weighted coeff.   : c̄ = Σ_{t∈H} c(T_t)·D_t / Σ_{t∈H} D_t   (first year)       (E3)
 cycle fade        : f^cyc = c̄ · n_EFC · δ                                     (E4)
 ```
+
+(E2) is `cycling_estimate = horizon_mean`, the default since October 2026. The original estimate,
+still available as `cycling_estimate = first_year`, is
+
+```
+n_EFC = Λ_1 · SoH_eol / Δ_1                                                   (E2′)
+```
+
+**Why the sizing year.** With growing demand and one investment, the nameplate has to carry the
+design night of the last year, and every earlier year discharges less against that same nameplate.
+When every user grows at the same rate, `Λ_y / Δ_y` is the same in every year, so (E2′) is the
+cycling of the sizing year itself, i.e. the peak. At 3 %/yr over 20 years the horizon mean (E2) is
+0.77 × the peak, and year 1 alone is 0.57 ×. With flat demand (E2) and (E2′) coincide. With
+capacity expansion each step is sized for its own last year, and `s(y)` follows the steps.
+
+**Why the horizon mean.** One service life `L` is applied to every cohort. Averaging over the first
+cohort only (about 0.63 × the peak over years 1–8) would give the longest life, and the later,
+harder-cycled cohorts would then hit the end-of-life floor (D2) before replacement and force
+oversizing. The peak (E2′) gives the shortest life and retires the early cohorts with budget left.
+The horizon mean sits between the two and weights every year once.
 
 **Why (E2) works.** An off-grid battery sized to carry the design night is discharged every night,
 so cycles per year ≈ (annual dark load)/(design night) — **the absolute sizing cancels**, which is
@@ -540,7 +562,8 @@ by roughly `1/SoH_eol`.
 **(E3)** weights the fade coefficient toward the hours discharge actually happens in — the cool
 ones — rather than averaging flat over the year.
 
-**Validation** against a solved LP on the BDI cluster, which the estimator never sees:
+**Validation** against a solved LP on the BDI cluster, which the estimator never sees (made with
+(E2′); it should be repeated on a cluster with demand growth, where (E2) and (E2′) differ):
 
 | quantity | estimated | realised | error |
 |---|---|---|---|
@@ -560,7 +583,7 @@ both ends of the SSA range.
 
 **Traceability.** Every derived run records, in
 `settings.battery_model.degradation_model`: `calendar_lifetime_mode`,
-`calendar_lifetime_years_derived`, `calendar_lifetime_years_used`,
+`calendar_lifetime_years_derived`, `calendar_lifetime_years_used`, `cycling_estimate`,
 `assumed_equivalent_full_cycles_per_year`, `assumed_cycle_fade_per_year`,
 `discharge_weighted_cycle_fade_coefficient`, `mean_cell_temperature_c`,
 `calendar_fade_budget_fraction`, and `calendar_fade_warning` when applicable.

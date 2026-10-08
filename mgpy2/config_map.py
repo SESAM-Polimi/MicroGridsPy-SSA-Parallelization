@@ -118,6 +118,14 @@ class ThesisConfig:
     # ~0.76 %/yr over 10 y. ~2.72 recovers the unscaled Ali envelope (the pessimistic end of the
     # 2.7x literature spread), so report both ends.
     battery_calendar_fade_scale: float = 1.0
+    # Cycling assumed by the derived service life (it must be guessed before the LP runs).
+    # "horizon_mean": each year's dark-hour discharge against the nameplate it is sized for
+    #   (the design night of the last year of its investment step, i.e. year 20 without
+    #   capacity expansion), averaged over the horizon. With 3 %/yr growth the early years
+    #   cycle ~40 % less than the sizing year.
+    # "first_year": the original estimate (year-1 discharge / year-1 design night), which
+    #   with uniform growth equals the sizing-year peak and so shortens the derived life.
+    battery_cycling_estimate: str = "horizon_mean"
     # "constant_efficiency" = fixed one-way efficiencies (charge/discharge above), with or
     #   without ageing. Same battery model as the September 2026 run when ageing is off.
     # "convex_loss_epigraph" = power-dependent conversion loss. Adds four hourly variables
@@ -199,7 +207,8 @@ def build_formulation_payload(project_name: str, cfg: ThesisConfig, description:
         "system_configuration": {"n_sources": 1},
         "battery_model": {"loss_model": cfg.battery_loss_model,
                           "degradation_model": {"cycle_fade_enabled": False, "calendar_fade_enabled": False,
-                                                "coefficients_enabled": cfg.battery_degradation_coefficients}},
+                                                "coefficients_enabled": cfg.battery_degradation_coefficients,
+                                                "cycling_estimate": cfg.battery_cycling_estimate}},
         "generator_model": {"efficiency_model": "constant_efficiency"},
         "csv_format": {"delimiter": cfg.csv_delimiter, "decimal": cfg.csv_decimal},
     }

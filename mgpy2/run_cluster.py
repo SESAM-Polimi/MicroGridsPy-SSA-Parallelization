@@ -225,6 +225,7 @@ BATTERY_DEGRADATION_FIELDS = (
     "calendar_lifetime_years_derived",           # root of the fade budget, before flooring
     "calendar_lifetime_years_used",              # whole years: replacement interval and CRF
     "mean_cell_temperature_c",                   # PVGIS air temperature + enclosure rise
+    "cycling_estimate",                          # "horizon_mean" | "first_year"
     "assumed_equivalent_full_cycles_per_year",
     "assumed_cycle_fade_per_year",
     "discharge_weighted_cycle_fade_coefficient",
