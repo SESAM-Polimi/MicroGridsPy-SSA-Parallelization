@@ -353,8 +353,8 @@ P_inv ≤ ρ_dis · U · E_unit                                       (C7)
 Σ_k U_k · E_unit ≤ E_max                                         (C8)
 ```
 
-(C4)–(C5) exist only with the epigraph; with constant efficiency the DC flows are fixed multiples
-of the AC flows, so (C2)–(C3) already bound them.
+(C4)–(C5) exist only with the epigraph. With constant efficiency the power limits apply to the AC
+side only, as in the September 2026 model, so the DC-side discharge can reach `P_inv / η_dis`.
 
 **Note:** (C6)–(C7) tie inverter power to **nameplate**, not to the faded state. Power capability
 therefore does not degrade — see limitation §9.5.
