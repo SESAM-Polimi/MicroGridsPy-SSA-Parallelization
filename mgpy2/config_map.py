@@ -52,7 +52,10 @@ class ThesisConfig:
     social_discount_rate: float = 0.10
     capacity_expansion: bool = False        # single investment step over the horizon
     demand_growth: float = 0.03
-    demand_growth_mode: str = "thesis_faithful"   # see input_prep.PrepConfig
+    # "consistent" = 3 %/yr compound growth for every user: households, health facilities
+    # and schools (decision D01, 30 Sep 2026). "thesis_faithful" reproduces the thesis run,
+    # where a decimal slip grew households and health facilities at 0.03 %/yr.
+    demand_growth_mode: str = "consistent"   # see input_prep.PrepConfig
 
     # renewable (Solar PV) — costs already converted to per-kW
     res_resource_label: str = "Solar"
