@@ -28,42 +28,50 @@ SOH0, SOH_EOL, DOD = 1.0, 0.7, 0.8
 TOL = 1e-6
 
 
-def _sets() -> xr.Dataset:
-    """Same layout as core.multi_year_model.sets.initialize_sets, one investment step."""
+def _sets(step_years=(len(YEARS),)) -> xr.Dataset:
+    """Same layout as core.multi_year_model.sets.initialize_sets (step durations in years)."""
+    assert sum(step_years) == len(YEARS)
+    steps = list(range(1, len(step_years) + 1))
+    starts = [YEARS[sum(step_years[:i])] for i in range(len(steps))]
+    ends = [YEARS[sum(step_years[:i + 1]) - 1] for i in range(len(steps))]
     ds = xr.Dataset(
         coords={
             "period": ("period", list(range(PERIODS))),
             "year": ("year", YEARS),
-            "inv_step": ("inv_step", [1]),
+            "inv_step": ("inv_step", steps),
             "scenario": ("scenario", ["scenario_1"]),
             "resource": ("resource", ["Solar"]),
         }
     )
-    ds["inv_step_start_year"] = xr.DataArray([YEARS[0]], dims=("inv_step",))
-    ds["inv_step_end_year"] = xr.DataArray([YEARS[-1]], dims=("inv_step",))
-    ds["inv_step_len_years"] = xr.DataArray([len(YEARS)], dims=("inv_step",))
-    ds["year_inv_step"] = xr.DataArray([1] * len(YEARS), dims=("year",))
-    ds["inv_active_in_year"] = xr.DataArray([[1] * len(YEARS)], dims=("inv_step", "year"))
+    ds["inv_step_start_year"] = xr.DataArray(starts, dims=("inv_step",))
+    ds["inv_step_end_year"] = xr.DataArray(ends, dims=("inv_step",))
+    ds["inv_step_len_years"] = xr.DataArray(list(step_years), dims=("inv_step",))
+    ds["year_inv_step"] = xr.DataArray([k for k, n in zip(steps, step_years) for _ in range(n)], dims=("year",))
+    ds["inv_active_in_year"] = xr.DataArray([[1 if y >= s0 else 0 for y in YEARS] for s0 in starts],
+                                            dims=("inv_step", "year"))
     return ds
 
 
 def _data(sets: xr.Dataset, *, coefficients: bool, cycle_c: float = CYCLE_FADE_C,
-          calendar_rate: float = CALENDAR_RATE, legacy_cycle_fade: bool = False) -> xr.Dataset:
+          calendar_rate: float = CALENDAR_RATE, legacy_cycle_fade: bool = False,
+          load_growth: float = 0.0) -> xr.Dataset:
     y, t, s, r, k = (sets.coords[n] for n in ("year", "period", "scenario", "resource", "inv_step"))
 
     def per_step(v):
-        return xr.DataArray([v], dims=("inv_step",), coords={"inv_step": k})
+        return xr.DataArray(np.full(k.size, v), dims=("inv_step",), coords={"inv_step": k})
 
     def per_step_res(v):
-        return xr.DataArray([[v]], dims=("inv_step", "resource"), coords={"inv_step": k, "resource": r})
+        return xr.DataArray(np.full((k.size, 1), v), dims=("inv_step", "resource"),
+                            coords={"inv_step": k, "resource": r})
 
     def per_res(v):
         return xr.DataArray([v], dims=("resource",), coords={"resource": r})
 
     night_load = np.array([1.0, 1.0, 0.0, 0.0])
     sun = np.array([0.0, 0.0, 1.0, 1.0])
+    growth = (1.0 + load_growth) ** np.arange(len(YEARS))
     data = xr.Dataset({
-        "load_demand": xr.DataArray(np.tile(night_load[None, :, None], (len(YEARS), 1, 1)),
+        "load_demand": xr.DataArray(growth[:, None, None] * night_load[None, :, None],
                                     dims=("year", "period", "scenario"), coords={"year": y, "period": t, "scenario": s}),
         "resource_availability": xr.DataArray(np.tile(sun[None, :, None, None], (len(YEARS), 1, 1, 1)),
                                               dims=("year", "period", "scenario", "resource"),
@@ -146,8 +154,8 @@ def _data(sets: xr.Dataset, *, coefficients: bool, cycle_c: float = CYCLE_FADE_C
     return data
 
 
-def _build(data: xr.Dataset):
-    sets = _sets()
+def _build(data: xr.Dataset, sets: xr.Dataset | None = None):
+    sets = _sets() if sets is None else sets
     model = lp.Model()
     v = initialize_vars(sets, data, model)
     initialize_constraints(sets, data, v, model)
@@ -229,3 +237,20 @@ def test_legacy_fade_flags_still_require_the_epigraph():
     data = _data(_sets(), coefficients=False, legacy_cycle_fade=True)
     with pytest.raises(Exception, match="convex_loss_epigraph"):
         _build(data)
+
+
+def test_second_investment_step_starts_fresh_and_ages():
+    """Capacity expansion: a cohort built in a later step enters at full health, then fades."""
+    sets = _sets(step_years=(1, 2))                        # build in 2026 and in 2027
+    model, v = _build(_data(sets, coefficients=True, load_growth=1.0), sets)   # load doubles yearly
+    sol = _solve(model)
+    eff = sol["battery_effective_energy_capacity"].sum("scenario")
+    units = sol["battery_units"]
+    assert float(units.sel(inv_step=2)) > 0.0              # growth forces a second battery
+    e2 = float(units.sel(inv_step=2))                      # nominal capacity 1 kWh per unit
+    assert float(eff.sel(inv_step=2, year=2026)) == pytest.approx(0.0, abs=TOL)       # not built yet
+    assert float(eff.sel(inv_step=2, year=2027)) == pytest.approx(SOH0 * e2, abs=TOL)  # fresh
+    fade = (float(sol["battery_cycle_fade"].sum("scenario").sel(inv_step=2, year=2027))
+            + float(sol["battery_calendar_fade"].sel(inv_step=2, year=2027)))
+    assert fade > 0.0
+    assert float(eff.sel(inv_step=2, year=2028)) == pytest.approx(SOH0 * e2 - fade, abs=TOL)
