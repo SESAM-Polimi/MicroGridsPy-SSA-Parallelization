@@ -12,8 +12,12 @@ Thesis structural mapping (from Data_sheet/a.yaml):
   time_horizon_years    20                 (project_settings.time_horizon)
   start_year_label      "2025"             (start_date 2025-01-01; run_yaml used 2025)
   social_discount_rate  0.1                (project_settings.discount_rate)
-  capacity_expansion    True, 2 steps      (thesis: false, one investment in year 1;
-                                            D02, 9 Oct 2026: build in year 1 and year 11).
+  capacity_expansion    True, 2 steps      (D02, 9 Oct 2026: build in year 1 and year 11).
+                                            The thesis ran the OLD engine with num_steps=20,
+                                            step_duration=1: one investment step per year.
+                                            Its capacity_expansion=false only dropped the
+                                            "capacity never decreases" constraint; it did
+                                            not make the investment single.
   n_res_sources         1                  (Solar PV)
   generator             disabled           (system_configuration=1 => battery only;
                                             template default max_installable_kw=0)
