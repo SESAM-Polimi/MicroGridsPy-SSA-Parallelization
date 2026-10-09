@@ -12,8 +12,8 @@ Thesis structural mapping (from Data_sheet/a.yaml):
   time_horizon_years    20                 (project_settings.time_horizon)
   start_year_label      "2025"             (start_date 2025-01-01; run_yaml used 2025)
   social_discount_rate  0.1                (project_settings.discount_rate)
-  capacity_expansion    False -> 1 step    (a.yaml capacity_expansion=false; single
-                                            investment over the horizon). TOGGLEABLE.
+  capacity_expansion    True, 2 steps      (thesis: false, one investment in year 1;
+                                            D02, 9 Oct 2026: build in year 1 and year 11).
   n_res_sources         1                  (Solar PV)
   generator             disabled           (system_configuration=1 => battery only;
                                             template default max_installable_kw=0)
@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import yaml
 
@@ -50,7 +50,11 @@ class ThesisConfig:
     time_horizon_years: int = 20
     start_year: int = 2025
     social_discount_rate: float = 0.10
-    capacity_expansion: bool = False        # single investment step over the horizon
+    # Capacity expansion (decision D02, Nicolò, 9 Oct 2026): two investment steps of 10 years,
+    # so the system is built in year 1 and extended in year 11. Each step's battery and PV are
+    # sized for the last year that step serves. False = one investment for the whole horizon.
+    capacity_expansion: bool = True
+    investment_step_years: Tuple[int, ...] = (10, 10)   # durations, must sum to the horizon
     demand_growth: float = 0.03
     # "consistent" = 3 %/yr compound growth for every user: households, health facilities
     # and schools (decision D01, 30 Sep 2026). "thesis_faithful" reproduces the thesis run,
@@ -172,8 +176,14 @@ class ThesisConfig:
         return year_labels(self.start_year, self.horizon())
 
     def investment_steps_years(self) -> Optional[List[int]]:
-        # capacity_expansion False -> a single step spanning the whole horizon
-        return None if not self.capacity_expansion else [self.horizon()]
+        """Step durations for formulation.json; None = one step spanning the whole horizon."""
+        if not self.capacity_expansion:
+            return None
+        steps = [int(s) for s in self.investment_step_years]
+        if sum(steps) != self.horizon() or min(steps) < 1:
+            raise ValueError(f"investment_step_years {steps} must be positive and sum to the "
+                             f"{self.horizon()}-year horizon.")
+        return steps
 
 
 # =============================================================================
