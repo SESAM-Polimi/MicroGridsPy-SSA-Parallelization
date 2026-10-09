@@ -142,12 +142,38 @@ def _status_ok(status: str, objective: Optional[float]) -> bool:
     return ("optimal" in t) or ("feasible" in t) or (t.strip() == "ok")
 
 
+def _head_commit_from_files(repo: Path) -> Optional[str]:
+    """Short commit hash of HEAD read straight from .git, without the git program.
+
+    The compute nodes cannot always run git (8 Oct 2026: every task of a hand-submitted
+    rerun array recorded 'unknown'). Reading HEAD -> ref -> hash is three small file reads.
+    Cannot tell whether the working tree is dirty, so the submit scripts' value is preferred.
+    """
+    git_dir = repo / ".git"
+    try:
+        head = (git_dir / "HEAD").read_text().strip()
+        if not head.startswith("ref:"):
+            return head[:7] or None                      # detached HEAD holds the hash itself
+        ref = head.split(":", 1)[1].strip()               # e.g. refs/heads/main
+        loose = git_dir / ref
+        if loose.exists():
+            return loose.read_text().strip()[:7] or None
+        for line in (git_dir / "packed-refs").read_text().splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[1] == ref:      # "<hash> <ref>"; skips comments and ^peeled lines
+                return parts[0][:7]
+    except OSError:
+        return None
+    return None
+
+
 def code_version() -> str:
     """Commit of the code that produced a result.
 
     Prefer $MGPY2_CODE_VERSION (computed ONCE by the submit script, incl. a
     '-dirty' flag): thousands of tasks must not each run `git status` on the same
-    repository. Fallback: a read-only `git rev-parse` (takes no lock).
+    repository. Fallbacks: a read-only `git rev-parse` (takes no lock), then reading
+    the hash from the .git folder directly (for nodes where git cannot run).
     """
     env = os.environ.get("MGPY2_CODE_VERSION")
     if env:
@@ -160,9 +186,11 @@ def code_version() -> str:
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=str(repo_root()), capture_output=True, text=True, timeout=10,
         )
-        return out.stdout.strip() or "unknown"
+        if out.stdout.strip():
+            return out.stdout.strip()
     except Exception:
-        return "unknown"
+        pass
+    return _head_commit_from_files(repo_root()) or "unknown"
 
 
 def _solver_version(solver: str) -> str:

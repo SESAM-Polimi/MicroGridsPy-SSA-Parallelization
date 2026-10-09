@@ -62,3 +62,37 @@ def test_run_info_carries_the_block():
     info = _run_info(ThesisConfig(), "highs", {}, "optimal", 1.0, 2.0, data=_data(DERIVED))
     assert info["battery_degradation"]["calendar_lifetime_years_used"] == 7.0
     json.dumps(info, default=str)
+
+
+# ---- code_version fallback without the git program ---------------------------------------
+from mgpy2.run_cluster import _head_commit_from_files
+
+
+def _fake_repo(tmp_path, head, loose=None, packed=None):
+    git = tmp_path / ".git"
+    (git / "refs" / "heads").mkdir(parents=True)
+    (git / "HEAD").write_text(head)
+    if loose:
+        (git / "refs" / "heads" / "main").write_text(loose)
+    if packed:
+        (git / "packed-refs").write_text(packed)
+    return tmp_path
+
+
+def test_head_from_loose_ref(tmp_path):
+    repo = _fake_repo(tmp_path, "ref: refs/heads/main\n", loose="f2f8cc4d1e9a0b7c\n")
+    assert _head_commit_from_files(repo) == "f2f8cc4"
+
+
+def test_head_from_packed_refs(tmp_path):
+    packed = ("# pack-refs with: peeled fully-peeled sorted\n"
+              "1111111aaaaaaa refs/heads/other\n"
+              "f2f8cc4d1e9a0b7c refs/heads/main\n"
+              "^2222222bbbbbbb\n")
+    repo = _fake_repo(tmp_path, "ref: refs/heads/main\n", packed=packed)
+    assert _head_commit_from_files(repo) == "f2f8cc4"
+
+
+def test_detached_head_and_missing_repo(tmp_path):
+    assert _head_commit_from_files(_fake_repo(tmp_path, "f2f8cc4d1e9a0b7c\n")) == "f2f8cc4"
+    assert _head_commit_from_files(tmp_path / "nowhere") is None
