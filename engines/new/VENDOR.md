@@ -42,6 +42,9 @@ is compute-only; all post-processing and visualization happen offline.
   `eta_c * P_ch` and `P_dis / eta_d`. The SSA pipeline default is now constant efficiency (the
   epigraph made Gurobi 10-20x slower). The legacy `cycle_fade_enabled`/`calendar_fade_enabled`
   scheme still requires the epigraph. See `docs/BATTERY_DEGRADATION.md` §4.3.
+- **Solver termination condition recorded** (`multi_year_model/model.py`): the solution's attrs
+  now carry `termination_condition` ("optimal", "suboptimal", "time_limit", ...) next to linopy's
+  coarse `status`, so the pipeline can refuse results that are not a proven optimum.
 - **Replaced upstream's calendar-ageing coefficients.** Upstream evaluates a hard-coded per-hour
   cubic in ambient temperature (which also disagrees by about 6x with the `alpha_poly` in its own
   JSON) giving 0.05 %/yr at 25 degC, i.e. a 386-year calendar life. Here calendar fade uses the

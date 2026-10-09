@@ -30,16 +30,6 @@ SOLVER="${SOLVER:-gurobi}"
 # Inside an SGE job submitted with "-pe smp N", SGE sets NSLOTS=N: the thread count
 # then follows the cores actually reserved (no oversubscription). Default 1.
 SOLVER_THREADS="${SOLVER_THREADS:-${NSLOTS:-1}}"
-# Extra solver-native options, ';'-separated (no commas: qsub -v splits on them).
-# Default for Gurobi = barrier WITH crossover (benchmark 17 Sep 2026: 91 core-s/task,
-# clean dispatch). NEVER Crossover=0: it charges and discharges the battery at once.
-# Note "${VAR-default}" (no colon): an explicitly EMPTY value (SOLVER_OPTS=) is kept,
-# so benchmarks can still request pure solver defaults.
-if [ "$SOLVER" = "gurobi" ]; then
-  SOLVER_OPTS="${SOLVER_OPTS-Method=2}"
-else
-  SOLVER_OPTS="${SOLVER_OPTS-}"
-fi
 SOLVER_TIME_LIMIT="${SOLVER_TIME_LIMIT:-18000}"   # seconds (5 h; H_RT is 6 h)
 HORIZON="${HORIZON:-20}"
 # System extensions (OPTIONAL). PV+battery only is feasible by default (the thesis
@@ -53,6 +43,26 @@ RUN_MODE="${RUN_MODE:-full}"
 # (everything else is rebuilt offline by mgpy2.reporting); "full" writes the legacy bundle.
 EXPORT_PROFILE="${EXPORT_PROFILE:-core}"
 DISPATCH_FORMAT="${DISPATCH_FORMAT:-parquet}"   # parquet (small/fast), csv, or none (summary.json only)
+
+# Extra solver-native options, ';'-separated (no commas: qsub -v splits on them).
+# Gurobi default: barrier WITHOUT crossover when no dispatch is written (production runs),
+# barrier WITH crossover when a dispatch file is exported.
+# Why (9 Oct 2026, 52-cluster comparison set, battery ageing on, 1 thread): without
+# crossover NPC is within 7e-9 and PV/battery sizes within 6e-7 of the crossover solution,
+# and the solve median drops from 605 s to 153 s (worst case 2,879 s -> 574 s). Crossover
+# only picks a corner among equally cheap solutions; without it ~0.05-0.2 % of battery
+# discharge falls in hours that also charge (PV surplus burnt as losses instead of
+# curtailed, same cost). That is invisible in summary.json but shows in a dispatch file,
+# hence crossover stays on whenever DISPATCH_FORMAT is not "none". (The 17 Sep 2026 rule
+# "never Crossover=0" was written for runs that exported dispatch.)
+# Note "${VAR-default}" (no colon): an explicitly EMPTY value (SOLVER_OPTS=) is kept,
+# so benchmarks can still request pure solver defaults.
+if [ "$SOLVER" = "gurobi" ]; then
+  if [ "$DISPATCH_FORMAT" = "none" ]; then _gurobi_default="Method=2;Crossover=0"; else _gurobi_default="Method=2"; fi
+  SOLVER_OPTS="${SOLVER_OPTS-$_gurobi_default}"
+else
+  SOLVER_OPTS="${SOLVER_OPTS-}"
+fi
 
 activate_env() {
   eval "$("$CONDA_BASE/bin/conda" shell.bash hook)"

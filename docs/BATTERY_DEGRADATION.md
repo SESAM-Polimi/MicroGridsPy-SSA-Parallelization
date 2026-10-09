@@ -761,8 +761,15 @@ Plus `formulation.json → battery_model.degradation_model.coefficients_enabled`
 11. **Integer flooring of the derived life** biases toward early retirement, by up to one year.
 12. **`battery_cycle_fade_coefficient` is stored per (period, year, scenario)**, duplicating a
     single typical year 20× when the temperature series does not vary by year.
-13. **20 dense LP rows.** Each annual `F^cyc` row in (D4) has 8760 non-zeros, which slows the
-    barrier factorisation (193 s against 145 s for the same-sized model with no degradation).
+13. **Solve time: crossover, not barrier.** Each annual `F^cyc` row in (D4) has 8760 non-zeros,
+    which slows the barrier factorisation a little (193 s against 145 s for the same-sized model
+    with no degradation). The real cost is Gurobi's crossover: the fade links every year's dispatch
+    to the next year's usable capacity, the simplex basis inherits that coupling, and on the SSA
+    clusters crossover went from 6–8 s to minutes (up to 48 min on the largest system). Splitting
+    the rows into daily partial sums did not help (Gurobi's presolve merged them back, and when
+    kept they left crossover just as slow). Production runs therefore solve with barrier only
+    (`Crossover=0`, set in `hpc/env.sh` when no dispatch is exported): on the 52-cluster comparison
+    set NPC matched the crossover solution within 7e-9 and sizes within 6e-7 (9 Oct 2026).
 
 ---
 
