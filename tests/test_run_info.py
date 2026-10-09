@@ -96,3 +96,28 @@ def test_head_from_packed_refs(tmp_path):
 def test_detached_head_and_missing_repo(tmp_path):
     assert _head_commit_from_files(_fake_repo(tmp_path, "f2f8cc4d1e9a0b7c\n")) == "f2f8cc4"
     assert _head_commit_from_files(tmp_path / "nowhere") is None
+
+
+# ---- solver status: a stored result must be a proven optimum ------------------------------
+from mgpy2.run_cluster import _status_ok
+
+
+def test_optimal_termination_is_accepted():
+    assert _status_ok("ok", 1.23e6, "optimal")
+
+
+def test_finite_objective_without_proven_optimum_is_rejected():
+    # barrier without crossover that stopped early still reports a finite objective
+    assert not _status_ok("warning", 1.23e6, "suboptimal")
+    assert not _status_ok("ok", 1.23e6, "time_limit")
+
+
+def test_unknown_termination_keeps_the_old_rule():
+    # older engine output without a termination condition: finite objective is enough
+    assert _status_ok("ok", 1.23e6, None)
+    assert not _status_ok("warning infeasible", None, None)
+
+
+def test_run_info_records_termination():
+    info = _run_info(ThesisConfig(), "gurobi", {"Crossover": 0}, "ok", 1.0, 2.0, termination="optimal")
+    assert info["solver_termination"] == "optimal"

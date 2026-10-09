@@ -238,6 +238,14 @@ class MultiYearModel:
         out.attrs["solver"] = solver
         out.attrs["solver_params"] = dict(solver_params or {})
         out.attrs["status"] = str(getattr(result, "status", getattr(self.model, "status", result)))
+        # linopy's status is coarse ("ok" / "warning"); the termination condition says whether
+        # the solver actually proved optimality ("optimal") or stopped early ("suboptimal",
+        # "time_limit", ...). Recent linopy returns (status, condition) and keeps both on the model.
+        termination = getattr(self.model, "termination_condition", None)
+        if termination is None and isinstance(result, tuple) and len(result) == 2:
+            termination = result[1]
+        if termination is not None:
+            out.attrs["termination_condition"] = str(getattr(termination, "value", termination))
 
         # objective value (best effort)
         obj_val = None

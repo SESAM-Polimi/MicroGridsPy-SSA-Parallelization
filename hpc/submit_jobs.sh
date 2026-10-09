@@ -26,6 +26,9 @@ if [ "$SOLVER_THREADS" -gt 1 ]; then RES+=(-pe smp "$SOLVER_THREADS"); fi
 # Pass the sample path to every task: each task starts a fresh shell on the
 # compute node, so without -v a value set here would be lost there.
 RES+=(-v "SAMPLE_CSV=$SAMPLE_CSV")
+# Same for the export format and the solver options: the solver default depends on
+# DISPATCH_FORMAT (env.sh), so both must reach the task exactly as shown below.
+RES+=(-v "DISPATCH_FORMAT=$DISPATCH_FORMAT" -v "SOLVER_OPTS=$SOLVER_OPTS")
 
 # Code version, computed ONCE here and stamped into every summary.json.
 # "-dirty" = uncommitted changes: results would not be reproducible from git.

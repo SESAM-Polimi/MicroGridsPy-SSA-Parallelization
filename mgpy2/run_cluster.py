@@ -125,13 +125,20 @@ def _read_lcoe(results_dir: Path) -> Optional[float]:
     return None
 
 
-def _status_ok(status: str, objective: Optional[float]) -> bool:
+def _status_ok(status: str, objective: Optional[float], termination: Optional[str] = None) -> bool:
     """Success if the solver did not report infeasibility and we have a finite objective.
     linopy/HiGHS report status 'ok' (not 'optimal'); infeasible runs report 'warning'
-    with objective NaN, so a finite objective is the reliable signal."""
+    with objective NaN, so a finite objective is the reliable signal.
+
+    When the termination condition is known it must be 'optimal'. A barrier run without
+    crossover that stops early (numerical trouble, time limit) still has a finite objective,
+    and would otherwise be stored as a normal result.
+    """
     import math
     t = str(status or "").lower()
     if "infeasible" in t:
+        return False
+    if termination is not None and str(termination).strip().lower() != "optimal":
         return False
     if objective is not None:
         try:
@@ -245,7 +252,8 @@ def _battery_degradation_info(data) -> dict:
 
 
 def _run_info(cfg: ThesisConfig, solver: str, solver_params: dict, status: str,
-              prep_s: Optional[float], solve_s: float, data=None) -> dict:
+              prep_s: Optional[float], solve_s: float, data=None,
+              termination: Optional[str] = None) -> dict:
     """Everything needed later to say HOW a summary.json was produced."""
     return {
         "code_version": code_version(),
@@ -253,6 +261,7 @@ def _run_info(cfg: ThesisConfig, solver: str, solver_params: dict, status: str,
         "solver_version": _solver_version(solver),
         "solver_params": dict(solver_params),     # incl. Threads, TimeLimit, Method...
         "solver_status": status,
+        "solver_termination": termination,       # "optimal" for every stored result
         "prep_seconds": None if prep_s is None else round(prep_s, 2),
         "solve_seconds": round(solve_s, 2),
         "pipeline_config": asdict(cfg),           # demand_growth_mode, costs, horizon...
@@ -314,11 +323,14 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
         )
         solve_s = time.perf_counter() - t0   # build + solve (the engine does both here)
         status = str(sol.attrs.get("status", ""))
+        termination = sol.attrs.get("termination_condition")
         obj = sol.attrs.get("objective_value")
 
-        if not _status_ok(status, obj):
-            _write_error(paths.results_dir, f"solve not optimal: status={status}")
-            return RunResult(cat, "infeasible", objective=obj, message=f"status={status}")
+        if not _status_ok(status, obj, termination):
+            _write_error(paths.results_dir,
+                         f"solve not optimal: status={status} termination={termination}")
+            return RunResult(cat, "infeasible", objective=obj,
+                             message=f"status={status} termination={termination}")
 
         export_multi_year_results(
             name, model.sets, model.data, model.model, model.vars,
@@ -326,7 +338,7 @@ def run_cluster(row: dict, cfg: Optional[ThesisConfig] = None, *,
             profile=cfg.export_profile, dispatch_format=cfg.dispatch_format,
             status=status, solver=solver,
             run_info=_run_info(cfg, solver, solver_params or {}, status, prep_s, solve_s,
-                               data=model.data),
+                               data=model.data, termination=termination),
         )
         lcoe = _read_lcoe(paths.results_dir)
         return RunResult(cat, "ok", objective=float(obj) if obj is not None else None, lcoe=lcoe)
