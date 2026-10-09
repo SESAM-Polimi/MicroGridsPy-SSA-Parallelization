@@ -62,17 +62,17 @@ class ResourceParams:
     output_format: str = "json"
 
 
+DEMAND_GROWTH_MODES = ("consistent", "thesis_faithful")
+
+
 @dataclass
 class PrepConfig:
     years: int
     year_labels: Sequence[str]
     demand_growth: float
-    scenario: str = "scenario_1"
-    resource_labels: Sequence[str] = field(default_factory=lambda: ["Solar"])
-    periods: int = PERIODS_PER_YEAR
-    csv_sep: str = ","
-    csv_decimal: str = "."
-    # Demand-growth semantics (see module note below):
+    # Demand-growth semantics (see module note below). No default on purpose: the pipeline
+    # default lives in config_map.ThesisConfig only, so a PrepConfig built by hand cannot
+    # silently fall back to a different mode.
     #   "thesis_faithful" — reproduce the ORIGINAL thesis pipeline EXACTLY, quirks
     #       included: households/hospitals grow at demand_growth/100 per year (the old
     #       apply_demand_growth divides by 100, so YAML 0.03 => 0.03%/yr), while school
@@ -81,7 +81,19 @@ class PrepConfig:
     #   "consistent" — apply ONE uniform compound growth (1+demand_growth)**y to the
     #       whole demand (households, hospitals AND schools). Use if you want to correct
     #       the original inconsistency; results will differ from the thesis after Y1.
-    demand_growth_mode: str = "thesis_faithful"
+    demand_growth_mode: str
+    scenario: str = "scenario_1"
+    resource_labels: Sequence[str] = field(default_factory=lambda: ["Solar"])
+    periods: int = PERIODS_PER_YEAR
+    csv_sep: str = ","
+    csv_decimal: str = "."
+
+    def __post_init__(self) -> None:
+        # Fail on a typo: compute_demand_kwh tests `mode == "thesis_faithful"`, so any other
+        # string would otherwise be treated as "consistent" without a word.
+        if self.demand_growth_mode not in DEMAND_GROWTH_MODES:
+            raise ValueError(f"demand_growth_mode={self.demand_growth_mode!r}; "
+                             f"expected one of {DEMAND_GROWTH_MODES}.")
 
 
 def year_labels(start_year: int, years: int) -> List[str]:
@@ -313,7 +325,7 @@ def _selftest() -> int:
 
     years = 3
     cfg = PrepConfig(years=years, year_labels=year_labels(2025, years),
-                     demand_growth=0.03, resource_labels=["Solar"])
+                     demand_growth=0.03, demand_growth_mode="consistent", resource_labels=["Solar"])
     rng = np.random.default_rng(0)
     demand = rng.random((PERIODS_PER_YEAR, years)) * 10.0
     cf = np.clip(rng.random((PERIODS_PER_YEAR, years)), 0, 1)
