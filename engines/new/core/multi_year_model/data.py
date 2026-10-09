@@ -1735,11 +1735,31 @@ def regenerate_grid_availability_dynamic(*, project_name: str, sets: xr.Dataset)
 # -----------------------------------------------------------------------------
 # main entrypoint (DYNAMIC)
 # -----------------------------------------------------------------------------
+CYCLING_ESTIMATES = ("horizon_mean", "first_year")
+
+
+def _annual_and_design_night(dark_load_one_year: np.ndarray) -> tuple[float, float] | None:
+    """(annual dark-hour load, design night) for one year of hourly dark load, or None.
+
+    The design night is the 95th percentile of the daily dark-hour load.
+    """
+    values = np.asarray(dark_load_one_year, dtype=float).reshape(-1)
+    annual = float(values.sum())
+    if annual <= 0.0 or values.size % 24 != 0:
+        return None
+    design_night = float(np.percentile(values.reshape(-1, 24).sum(axis=1), 95.0))
+    if design_night <= 0.0:
+        return None
+    return annual, design_night
+
+
 def _estimate_equivalent_full_cycles_per_year(
     *,
     load_demand: xr.DataArray,
     resource_availability: xr.DataArray,
     end_of_life_soh: float,
+    sizing_year_of: dict | None = None,
+    mode: str = "horizon_mean",
 ) -> tuple[float, xr.DataArray]:
     """Cycles per year an off-grid battery sized for the design night will actually see.
 
@@ -1750,23 +1770,52 @@ def _estimate_equivalent_full_cycles_per_year(
     end-of-life state, which is the condition a planner actually sizes for; leaving it out
     underestimates the nameplate and so overestimates the cycling by about 1/SoH_eol.
 
-    Returns the cycles per year and the dark-hour load profile, which the caller uses to
-    weight the temperature-dependent fade coefficient towards the hours discharge happens in.
+    With growing demand the nameplate is fixed by the design night of the LAST year its
+    investment step serves (`sizing_year_of[y]`: the end year of the step that year y belongs
+    to; the horizon end for a single up-front investment). Year y then cycles
+    annual(y) * SoH_eol / design_night(sizing_year_of[y]), which is lower than the
+    same-year ratio in every year before the sizing year.
+
+    mode
+      "horizon_mean": mean of that per-year value over the horizon. One service life L is
+                      applied to every cohort, so the estimate averages over all of them.
+      "first_year":   annual(y0) * SoH_eol / design_night(y0), the original estimate (a429b26).
+                      With the same growth rate for every user this equals the cycling of the
+                      sizing year itself, i.e. the peak, so it biases the derived life short.
+
+    Returns the cycles per year and the first year's dark-hour load profile, which the caller
+    uses to weight the temperature-dependent fade coefficient towards the hours discharge
+    happens in (the shape is the same every year when all users grow at one rate).
     """
+    if mode not in CYCLING_ESTIMATES:
+        raise InputValidationError(
+            f"battery_model.degradation_model.cycling_estimate='{mode}' is not one of {CYCLING_ESTIMATES}."
+        )
     dark = (resource_availability.sum("resource") <= 1e-9)
-    dark_load = (load_demand * dark).isel(year=0)
+    dark_load = load_demand * dark
     if "scenario" in dark_load.dims:
         dark_load = dark_load.mean("scenario")
-    values = np.asarray(dark_load.values, dtype=float)
-    annual = float(values.sum())
+    first_year_profile = dark_load.isel(year=0)
     fallback = 365.0 * float(end_of_life_soh)
-    if annual <= 0.0 or values.size % 24 != 0:
-        return fallback, dark_load
-    daily = values.reshape(-1, 24).sum(axis=1)
-    design_night = float(np.percentile(daily, 95.0))
-    if design_night <= 0.0:
-        return fallback, dark_load
-    return annual * float(end_of_life_soh) / design_night, dark_load
+
+    years = dark_load.coords["year"].values.tolist()
+    if mode == "first_year":
+        first = _annual_and_design_night(first_year_profile.values)
+        if first is None:
+            return fallback, first_year_profile
+        annual, design_night = first
+        return annual * float(end_of_life_soh) / design_night, first_year_profile
+
+    by_year = {y: _annual_and_design_night(dark_load.sel(year=y).values) for y in years}
+    if sizing_year_of is None:
+        sizing_year_of = {y: years[-1] for y in years}   # single investment step
+    cycles = []
+    for y in years:
+        sized_for = by_year.get(sizing_year_of[y])
+        if by_year[y] is None or sized_for is None:
+            return fallback, first_year_profile
+        cycles.append(by_year[y][0] * float(end_of_life_soh) / sized_for[1])
+    return float(np.mean(cycles)), first_year_profile
 
 
 def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
@@ -2073,10 +2122,20 @@ def _initialize_data_legacy(project_name: str, sets: xr.Dataset) -> xr.Dataset:
                 # Service life is not an independent assumption: it is the year the cohort
                 # reaches end_of_life_soh. Cycling intensity is the one thing we cannot know
                 # before solving, so it is estimated from the load and irradiance profiles.
+                # The year whose design night fixes the nameplate serving each year: the
+                # end of that year's investment step (the horizon end without expansion).
+                _end_of_step = dict(zip(sets.coords["inv_step"].values.tolist(),
+                                        sets["inv_step_end_year"].values.tolist()))
+                _sizing_year_of = {
+                    y: _end_of_step[k]
+                    for y, k in zip(sets.coords["year"].values.tolist(), sets["year_inv_step"].values.tolist())
+                }
                 efc_per_year, dark_load = _estimate_equivalent_full_cycles_per_year(
                     load_demand=load_demand,
                     resource_availability=resource_avail,
                     end_of_life_soh=float(battery_degradation_settings.get("end_of_life_soh", None) or 0.8),
+                    sizing_year_of=_sizing_year_of,
+                    mode=battery_degradation_settings.get("cycling_estimate", "horizon_mean"),
                 )
                 _c_da = xr.DataArray(
                     coeff_res["c"], dims=ambient_temperature.dims, coords=dict(ambient_temperature.coords)

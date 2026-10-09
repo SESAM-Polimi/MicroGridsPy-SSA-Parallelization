@@ -136,6 +136,15 @@ def get_battery_degradation_settings(
         calendar_time_increment_mode = "constant_per_year"
 
     coefficients_enabled = _coerce_bool(degradation_model.get("coefficients_enabled", False), default=False)
+    # How the derived service life estimates cycling before the LP runs (multi_year_model/data.py,
+    # _estimate_equivalent_full_cycles_per_year): mean over the horizon of each year's discharge
+    # against the nameplate it is sized for, or the original first-year ratio.
+    cycling_estimate = str(degradation_model.get("cycling_estimate", "horizon_mean") or "horizon_mean").strip().lower()
+    if cycling_estimate not in ("horizon_mean", "first_year"):
+        raise InputValidationError(
+            "battery_model.degradation_model.cycling_estimate must be 'horizon_mean' or 'first_year', "
+            f"got '{cycling_estimate}'."
+        )
     if coefficients_enabled and formulation_mode != "dynamic":
         raise InputValidationError(
             "battery_model.degradation_model.coefficients_enabled is supported only in the dynamic "
@@ -240,6 +249,7 @@ def get_battery_degradation_settings(
         "cycle_lifetime_to_eol_cycles": cycle_lifetime_to_eol_cycles,
         "endogenous_degradation_enabled": bool(cycle_fade_enabled or calendar_fade_enabled),
         "coefficients_enabled": coefficients_enabled,
+        "cycling_estimate": cycling_estimate,
     }
 
 

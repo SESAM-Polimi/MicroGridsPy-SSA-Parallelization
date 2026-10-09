@@ -45,6 +45,11 @@ is compute-only; all post-processing and visualization happen offline.
 - **Solver termination condition recorded** (`multi_year_model/model.py`): the solution's attrs
   now carry `termination_condition` ("optimal", "suboptimal", "time_limit", ...) next to linopy's
   coarse `status`, so the pipeline can refuse results that are not a proven optimum.
+- **Cycling estimate for the derived battery life uses the sizing year**
+  (`multi_year_model/data.py`, `_estimate_equivalent_full_cycles_per_year`; new setting
+  `battery_model.degradation_model.cycling_estimate`). Default `horizon_mean`: each year's dark-hour
+  load over the design night of the last year of its investment step, averaged over the horizon.
+  `first_year` keeps the original year-1 ratio. See `docs/BATTERY_DEGRADATION.md` §5.3.
 - **Replaced upstream's calendar-ageing coefficients.** Upstream evaluates a hard-coded per-hour
   cubic in ambient temperature (which also disagrees by about 6x with the `alpha_poly` in its own
   JSON) giving 0.05 %/yr at 25 degC, i.e. a 386-year calendar life. Here calendar fade uses the
