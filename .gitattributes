@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.xlsx binary
+*.zip binary
+*.png binary
+*.pdf binary
+# Published data releases are pinned by SHA256SUMS: git must store them byte for byte.
+data/archetypes/** -text
+input_generator/**/*.gpkg filter=lfs diff=lfs merge=lfs -text
+input_generator/**/*.tif filter=lfs diff=lfs merge=lfs -text
+input_generator/**/*.zip filter=lfs diff=lfs merge=lfs -text
