@@ -64,6 +64,9 @@ class ThesisConfig:
     # and schools (decision D01, 30 Sep 2026). "thesis_faithful" reproduces the thesis run,
     # where a decimal slip grew households and health facilities at 0.03 %/yr.
     demand_growth_mode: str = "consistent"   # see input_prep.PrepConfig
+    # A household cluster without a valid cooling class stops the run (input_prep.cooling_regime).
+    # True reads a missing class as "no cooling", as every run before Nov 2026 did.
+    allow_missing_cooling: bool = False
 
     # renewable (Solar PV) — costs already converted to per-kW
     res_resource_label: str = "Solar"
@@ -394,6 +397,7 @@ def build_project(project_name: str, row: dict, cfg: ThesisConfig,
     prep = PrepConfig(
         years=cfg.horizon(), year_labels=cfg.year_labels(),
         demand_growth=cfg.demand_growth, demand_growth_mode=cfg.demand_growth_mode,
+        allow_missing_cooling=cfg.allow_missing_cooling,
         resource_labels=[cfg.res_resource_label],
         csv_sep=cfg.csv_delimiter, csv_decimal=cfg.csv_decimal,
     )

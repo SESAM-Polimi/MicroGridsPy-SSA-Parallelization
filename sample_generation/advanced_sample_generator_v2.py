@@ -50,13 +50,30 @@ UTM_ZONES = {
     "UGA": "EPSG:32636", "ZAF": "EPSG:32735", "ZMB": "EPSG:32735", "ZWE": "EPSG:32735"
 }
 
-# Climate zone mapping for demand archetypes (numeric to string codes)
+# SUPERSEDED (Nov 2026) by input_generator/code/input_generator.py, which recomputes the
+# cooling class of every cluster (SPARSE included) from WorldClim Tmin/Tavg/Tmax.
+#
+# Cooling class of the demand archetypes, from the M-LED column `cl_type` (Husein et al.
+# 2024, Heliyon 10, e27440: mean monthly CDD26 > 90 all year / Apr-Sep / Oct-Mar / never).
+# Until Nov 2026 this script read `climate_class` instead, which is a Koeppen-Geiger code
+# (0-29), with the mapping 1 NC, 2 AS, 3 OM, 4 AY and "NA" for every other code. All samples
+# generated before that date carry wrong cooling classes.
+COOLING_COLUMN = "cl_type"
 COOLING_MAPPING = {
-    1: "NC",  # No cooling
-    2: "AS",  # Arid/Semi-arid
-    3: "OM",  # Other/Moderate
-    4: "AY"   # All year cooling
+    1: "AY",  # cooling all year
+    2: "AS",  # cooling April-September
+    3: "OM",  # cooling October-March
+    4: "NC",  # no cooling
 }
+
+
+def cooling_class(row):
+    """Cooling class of a cluster row; fails on an unknown code instead of writing 'NA'."""
+    code = row[COOLING_COLUMN]
+    try:
+        return COOLING_MAPPING[int(code)]
+    except (KeyError, TypeError, ValueError):
+        raise ValueError(f"cluster {row.get('cat', '?')}: {COOLING_COLUMN}={code!r} is not 1-4") from None
 
 # Parameters
 SCHOOL_BUFFER_M = 250  # Buffer distance for school assignment to GHSL clusters
@@ -310,7 +327,7 @@ for idx, row in ghsl.iterrows():
         'distance_grid_km': row['distance_grid_km'],
         'pop_sum': row['POP_sum'],
         'density': row['DEN_average'],
-        'cooling': COOLING_MAPPING.get(row['climate_class'], 'NA'),
+        'cooling': cooling_class(row),
         'rwi': row['rwi'],
         'rwi_std': row.get('rwi_std', 0.0)  # Will be updated after sparse cluster processing
     })
@@ -499,7 +516,7 @@ for idx, row in sparse_proj.iterrows():
         'distance_grid_km': 0.0,
         'pop_sum': pop,
         'density': density,
-        'cooling': COOLING_MAPPING.get(closest_ghsl['climate_class'], 'NA'),
+        'cooling': cooling_class(closest_ghsl),
         'rwi': rwi,
         'rwi_std': rwi_std
     })

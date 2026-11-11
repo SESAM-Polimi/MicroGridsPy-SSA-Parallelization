@@ -49,8 +49,15 @@ How the rows were built (thesis §Methods, not re-run by this code; `sample_gene
 - households = population / national average household size, split into 5 tiers using the
   Relative Wealth Index distribution;
 - health facilities from JRC, already classified by level;
-- `cooling`: which part of the year needs cooling (all-year, none, Apr–Sep, Oct–Mar),
-  derived from the climatic zone.
+- `cooling`: which part of the year needs cooling: `AY` all year, `AS` April–September,
+  `OM` October–March, `NC` none. Classes of Husein et al. (2024): mean monthly cooling degree
+  days at 26 °C above 90 in the half-year. Degree days from WorldClim 2.1 monthly Tmin, Tavg
+  and Tmax with the UK Met Office method (Falchetta & Mistry 2021, Table 1).
+  **Samples generated before November 2026 carry wrong classes**: the thesis generator read
+  the Köppen-Geiger code (`climate_class`, 0–29) of the M-LED tables as if it were the cooling
+  class (`cl_type`, 1–4), so savanna became "Oct–Mar", most other climates "NA", and "NA" was
+  then run as no cooling. A household cluster without a valid class now stops the run
+  (`input_prep.cooling_regime`); check a sample folder with `python hpc/check_samples.py`.
 
 Rules the code relies on: `cat` must be unique (checked 15 Sep: 53,239 unique in ETH);
 rows starting with `//` are comments and are skipped.
