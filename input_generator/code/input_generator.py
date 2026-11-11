@@ -26,7 +26,8 @@ GHSL_PATH = INPUT_ROOT / f"{COUNTRY}_Population_Clusters_EPSG4326.gpkg.zip"
 SCHOOLS_PATH = INPUT_ROOT / f"schools_{COUNTRY}.gpkg"
 GADM_PATH = INPUT_ROOT / f"gadm41_{COUNTRY}.gpkg"
 WORLDPOP_RASTER = INPUT_ROOT / f"{COUNTRY.lower()}_pop_2020_CN_1km_R2025A_UA_v1.tif"
-WORLDCLIM_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tavg.tif"
+WORLDCLIM_TMIN_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tmin.tif"
+WORLDCLIM_TMAX_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tmax.tif"
 RWI_RASTER = GLOBAL_ROOT / "rwi.tif"
 HDI_PATH = GLOBAL_ROOT / "hdi_values.csv"
 HOUSEHOLD_PATH = GLOBAL_ROOT / "household_number.csv"
@@ -34,6 +35,9 @@ OUTPUT_PATH = BASE_ROOT / "sample" / f"{COUNTRY}_sample.csv"
 POPULATION_THRESHOLD = 300
 CONNECTIVITY = 8
 SCHOOL_DISTANCE_M = 250
+# Numbering of `cl_type` in the M-LED cluster tables (Husein et al. 2024). Kept for reference:
+# the classes are recomputed below so that SPARSE clusters get one too. Do NOT read the
+# `climate_class` column for this: it is a Koeppen-Geiger code (0-29), not a cooling class.
 COOLING_MAPPING = {1: "AY", 2: "AS", 3: "OM", 4: "NC"}
 TIER_COLUMNS = [f"h_tier{i}" for i in range(1, 6)]
 OUTPUT_COLUMNS = [
@@ -156,20 +160,66 @@ def load_ghsl(country):
     return pd.DataFrame(data.drop(columns="geometry")), geometry
 
 
-def cooling_from_worldclim(frame):
-    """Approximate CDD26 from monthly WorldClim tavg; not original daily CDD method.
+COOLING_BASE_TEMPERATURE_C = 26.0
+COOLING_CDD_THRESHOLD = 90.0   # mean monthly CDD26 above which a half-year needs cooling
+DAYS_PER_MONTH = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+APR_SEP = [3, 4, 5, 6, 7, 8]
+OCT_MAR = [9, 10, 11, 0, 1, 2]
 
-    Mean monthly CDD26 for Apr-Sep and Oct-Mar is compared with 90.
-    NoData is replaced by nearest raster cell with valid values in all 12 months.
+
+def monthly_cdd(tmin, tmax, base=COOLING_BASE_TEMPERATURE_C):
+    """Monthly cooling degree days from monthly mean Tmin and Tmax.
+
+    UK Met Office method (Spinoni et al. 2018) as used by Falchetta & Mistry (2021),
+    Energy Economics 99, 105307, Table 1. Degree days per average day of the month,
+    with Tmid = (Tmax + Tmin) / 2:
+
+        Tmax <= base                  0
+        Tmid <= base < Tmax           (Tmax - base) / 4
+        Tmin <= base < Tmid           (Tmax - base) / 2 - (base - Tmin) / 4
+        Tmin >= base                  Tmid - base
+
+    The formula assumes a daily cycle symmetric between Tmin and Tmax, so the mean it
+    uses is the midpoint; with the midpoint the four cases join without jumps (see the
+    tests). WorldClim 2.1 Tavg equals the midpoint to within 0.05 C, so using it would
+    change 11 of 212,626 clusters, but the midpoint is the definition and needs one
+    raster fewer. Unlike max(Tavg - base, 0), this counts the hot hours of days whose
+    mean stays below the base temperature. Arrays have shape (clusters, 12).
     """
+    tmin, tmax = (np.asarray(a, dtype=float) for a in (tmin, tmax))
+    tmid = (tmin + tmax) / 2
+    per_day = np.zeros_like(tmid)
+    warm_afternoon = (tmid <= base) & (tmax > base)
+    per_day[warm_afternoon] = (tmax[warm_afternoon] - base) / 4
+    cool_night = (tmin <= base) & (tmid > base)
+    per_day[cool_night] = (tmax[cool_night] - base) / 2 - (base - tmin[cool_night]) / 4
+    always_hot = tmin >= base
+    per_day[always_hot] = tmid[always_hot] - base
+    return per_day * DAYS_PER_MONTH
+
+
+def cooling_class(cdd, threshold=COOLING_CDD_THRESHOLD):
+    """Climate types of Husein et al. (2024), Heliyon 10, e27440, section 2.4.2.
+
+    AY: mean monthly CDD26 above the threshold in both half-years; AS: only
+    April-September; OM: only October-March; NC: neither.
+    """
+    apr_sep = cdd[:, APR_SEP].mean(axis=1) > threshold
+    oct_mar = cdd[:, OCT_MAR].mean(axis=1) > threshold
+    return np.select([apr_sep & oct_mar, apr_sep & ~oct_mar, ~apr_sep & oct_mar],
+                     ["AY", "AS", "OM"], default="NC")
+
+
+def sample_monthly_raster(path, frame):
+    """12 monthly values per cluster; NoData takes the nearest cell valid in all months."""
     from scipy.ndimage import distance_transform_edt
-    if not WORLDCLIM_RASTER.exists():
-        raise FileNotFoundError(f"Missing WorldClim raster: {WORLDCLIM_RASTER}")
-    with rasterio.open(WORLDCLIM_RASTER) as src:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing WorldClim raster: {path}")
+    with rasterio.open(path) as src:
         if src.count != 12:
-            raise ValueError(f"{WORLDCLIM_RASTER}: expected 12 monthly bands, got {src.count}")
+            raise ValueError(f"{path}: expected 12 monthly bands, got {src.count}")
         coords = gpd.GeoSeries(gpd.points_from_xy(frame.lon, frame.lat), crs="EPSG:4326").to_crs(src.crs)
-        samples = np.ma.array(list(src.sample([(p.x,p.y) for p in coords], masked=True)))
+        samples = np.ma.array(list(src.sample([(p.x, p.y) for p in coords], masked=True)))
         vals = samples.filled(np.nan).astype(float)
         if src.nodata is not None:
             vals[vals == src.nodata] = np.nan
@@ -178,24 +228,26 @@ def cooling_from_worldclim(frame):
             all_bands = src.read(masked=True)
             valid = (~np.ma.getmaskarray(all_bands)).all(axis=0) & np.isfinite(all_bands.filled(np.nan)).all(axis=0)
             if not valid.any():
-                raise ValueError(f"No valid climate cells in {WORLDCLIM_RASTER}")
+                raise ValueError(f"No valid climate cells in {path}")
             nearest = distance_transform_edt(~valid, return_distances=False, return_indices=True)
             for i in np.flatnonzero(missing):
-                x,y = coords.iloc[i].x, coords.iloc[i].y
-                row,col = src.index(x,y)
-                row = np.clip(row,0,src.height-1)
-                col = np.clip(col,0,src.width-1)
-                rr,cc = nearest[:,row,col]
-                vals[i] = all_bands[:,rr,cc].filled(np.nan)
-            print(f"{COUNTRY}: WorldClim nearest-valid-cell fallback for {missing.sum()} clusters")
+                x, y = coords.iloc[i].x, coords.iloc[i].y
+                row, col = src.index(x, y)
+                row = np.clip(row, 0, src.height - 1)
+                col = np.clip(col, 0, src.width - 1)
+                rr, cc = nearest[:, row, col]
+                vals[i] = all_bands[:, rr, cc].filled(np.nan)
+            print(f"{COUNTRY}: {path.name} nearest-valid-cell fallback for {missing.sum()} clusters")
     if not np.isfinite(vals).all():
-        raise ValueError("Missing cooling data after nearest-cell fallback")
-    days = np.array([31,28,31,30,31,30,31,31,30,31,30,31])
-    cdd = np.maximum(vals-26,0)*days
-    apr_sep = cdd[:,3:9].mean(axis=1)>90
-    oct_mar = cdd[:,[9,10,11,0,1,2]].mean(axis=1)>90
-    return np.select([apr_sep & oct_mar, apr_sep & ~oct_mar, ~apr_sep & oct_mar],
-                     ["AY", "AS", "OM"], default="NC")
+        raise ValueError(f"{path}: missing climate data after nearest-cell fallback")
+    return vals
+
+
+def cooling_from_worldclim(frame):
+    """Cooling class per cluster from WorldClim 2.1 monthly Tmin and Tmax (1970-2000)."""
+    tmin = sample_monthly_raster(WORLDCLIM_TMIN_RASTER, frame)
+    tmax = sample_monthly_raster(WORLDCLIM_TMAX_RASTER, frame)
+    return cooling_class(monthly_cdd(tmin, tmax))
 
 
 def make_sparse(country, ghsl_geometry, gadm_path):
@@ -397,7 +449,8 @@ def generate_country(country, adjustments, household_sizes):
 
 
 def main():
-    required_paths = [SCHOOLS_PATH, GADM_PATH, WORLDPOP_RASTER, WORLDCLIM_RASTER,
+    required_paths = [SCHOOLS_PATH, GADM_PATH, WORLDPOP_RASTER,
+                      WORLDCLIM_TMIN_RASTER, WORLDCLIM_TMAX_RASTER,
                       RWI_RASTER, HDI_PATH, HOUSEHOLD_PATH]
     missing = [str(p) for p in required_paths if not p.exists()]
     if missing:
