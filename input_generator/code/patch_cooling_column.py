@@ -2,7 +2,7 @@
 
 Used once (11 Nov 2026) to update the 39 samples in input_generator/sample without rerunning the
 whole generator, whose LFS inputs lack the Tmin/Tmax rasters. A full rerun of input_generator.py
-with the 30 arc-sec Tmin, Tavg and Tmax rasters gives the same classes.
+with the 30 arc-sec Tmin and Tmax rasters gives the same classes.
 
 Only the `cooling` field of population clusters (GHSL_*, SPARSE_*) changes; every other byte of
 each CSV stays as it is (schools keep "NA"). The classification functions are imported from the
@@ -11,7 +11,7 @@ generator on branch cooling-met-office, so the samples and the script cannot dri
     python input_generator/code/patch_cooling_column.py input_generator/code/input_generator.py \
         input_generator/sample "wc30s/ssa_{var}_{month:02d}.tif" [--write] [--report DIR]
 
-RASTER_PATTERN has {var} and {month}: WorldClim 2.1 monthly tmin/tavg/tmax at 30 arc-sec
+RASTER_PATTERN has {var} and {month}: WorldClim 2.1 monthly tmin/tmax at 30 arc-sec
 (1970-2000), here cropped to lon -20..55, lat -36..28. Without --write it only reports what would
 change; --report DIR writes per-country old/new classes and a summary there.
 """
@@ -95,11 +95,11 @@ for f in sorted(sample_dir.glob("*_sample.csv")):
     pop = [k for k, r in enumerate(body) if not r[i_cat].startswith("SCHOOL")]
     lon = np.array([float(body[k][i_lon]) for k in pop]); lat = np.array([float(body[k][i_lat]) for k in pop])
     t = {}; nfill = {}
-    for v in ("tmin", "tavg", "tmax"):
+    for v in ("tmin", "tmax"):
         t[v], nfill[v] = sample(v, lon, lat)
     if not all(np.isfinite(t[v]).all() for v in t):
         sys.exit(f"{f.name}: missing climate data after nearest-cell fallback")
-    new = gen.cooling_class(gen.monthly_cdd(t["tmin"], t["tavg"], t["tmax"]))
+    new = gen.cooling_class(gen.monthly_cdd(t["tmin"], t["tmax"]))
     old = np.array([body[k][i_cool] for k in pop])
     for k, c in zip(pop, new):
         body[k][i_cool] = c

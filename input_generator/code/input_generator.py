@@ -26,7 +26,6 @@ GHSL_PATH = INPUT_ROOT / f"{COUNTRY}_Population_Clusters_EPSG4326.gpkg.zip"
 SCHOOLS_PATH = INPUT_ROOT / f"schools_{COUNTRY}.gpkg"
 GADM_PATH = INPUT_ROOT / f"gadm41_{COUNTRY}.gpkg"
 WORLDPOP_RASTER = INPUT_ROOT / f"{COUNTRY.lower()}_pop_2020_CN_1km_R2025A_UA_v1.tif"
-WORLDCLIM_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tavg.tif"
 WORLDCLIM_TMIN_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tmin.tif"
 WORLDCLIM_TMAX_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tmax.tif"
 RWI_RASTER = GLOBAL_ROOT / "rwi.tif"
@@ -168,28 +167,34 @@ APR_SEP = [3, 4, 5, 6, 7, 8]
 OCT_MAR = [9, 10, 11, 0, 1, 2]
 
 
-def monthly_cdd(tmin, tavg, tmax, base=COOLING_BASE_TEMPERATURE_C):
-    """Monthly cooling degree days from monthly mean Tmin, Tavg and Tmax.
+def monthly_cdd(tmin, tmax, base=COOLING_BASE_TEMPERATURE_C):
+    """Monthly cooling degree days from monthly mean Tmin and Tmax.
 
     UK Met Office method (Spinoni et al. 2018) as used by Falchetta & Mistry (2021),
-    Energy Economics 99, 105307, Table 1. Degree days per average day of the month:
+    Energy Economics 99, 105307, Table 1. Degree days per average day of the month,
+    with Tmid = (Tmax + Tmin) / 2:
 
         Tmax <= base                  0
-        Tavg <= base < Tmax           (Tmax - base) / 4
-        Tmin <= base < Tavg           (Tmax - base) / 2 - (base - Tmin) / 4
-        Tmin >= base                  Tavg - base
+        Tmid <= base < Tmax           (Tmax - base) / 4
+        Tmin <= base < Tmid           (Tmax - base) / 2 - (base - Tmin) / 4
+        Tmin >= base                  Tmid - base
 
-    Unlike max(Tavg - base, 0), this counts the hot hours of days whose mean stays
-    below the base temperature. Arrays have shape (clusters, 12).
+    The formula assumes a daily cycle symmetric between Tmin and Tmax, so the mean it
+    uses is the midpoint; with the midpoint the four cases join without jumps (see the
+    tests). WorldClim 2.1 Tavg equals the midpoint to within 0.05 C, so using it would
+    change 11 of 212,626 clusters, but the midpoint is the definition and needs one
+    raster fewer. Unlike max(Tavg - base, 0), this counts the hot hours of days whose
+    mean stays below the base temperature. Arrays have shape (clusters, 12).
     """
-    tmin, tavg, tmax = (np.asarray(a, dtype=float) for a in (tmin, tavg, tmax))
-    per_day = np.zeros_like(tavg)
-    warm_afternoon = (tavg <= base) & (tmax > base)
+    tmin, tmax = (np.asarray(a, dtype=float) for a in (tmin, tmax))
+    tmid = (tmin + tmax) / 2
+    per_day = np.zeros_like(tmid)
+    warm_afternoon = (tmid <= base) & (tmax > base)
     per_day[warm_afternoon] = (tmax[warm_afternoon] - base) / 4
-    cool_night = (tmin <= base) & (tavg > base)
+    cool_night = (tmin <= base) & (tmid > base)
     per_day[cool_night] = (tmax[cool_night] - base) / 2 - (base - tmin[cool_night]) / 4
     always_hot = tmin >= base
-    per_day[always_hot] = tavg[always_hot] - base
+    per_day[always_hot] = tmid[always_hot] - base
     return per_day * DAYS_PER_MONTH
 
 
@@ -239,11 +244,10 @@ def sample_monthly_raster(path, frame):
 
 
 def cooling_from_worldclim(frame):
-    """Cooling class per cluster from WorldClim 2.1 monthly Tmin, Tavg and Tmax (1970-2000)."""
+    """Cooling class per cluster from WorldClim 2.1 monthly Tmin and Tmax (1970-2000)."""
     tmin = sample_monthly_raster(WORLDCLIM_TMIN_RASTER, frame)
-    tavg = sample_monthly_raster(WORLDCLIM_RASTER, frame)
     tmax = sample_monthly_raster(WORLDCLIM_TMAX_RASTER, frame)
-    return cooling_class(monthly_cdd(tmin, tavg, tmax))
+    return cooling_class(monthly_cdd(tmin, tmax))
 
 
 def make_sparse(country, ghsl_geometry, gadm_path):
@@ -445,7 +449,7 @@ def generate_country(country, adjustments, household_sizes):
 
 
 def main():
-    required_paths = [SCHOOLS_PATH, GADM_PATH, WORLDPOP_RASTER, WORLDCLIM_RASTER,
+    required_paths = [SCHOOLS_PATH, GADM_PATH, WORLDPOP_RASTER,
                       WORLDCLIM_TMIN_RASTER, WORLDCLIM_TMAX_RASTER,
                       RWI_RASTER, HDI_PATH, HOUSEHOLD_PATH]
     missing = [str(p) for p in required_paths if not p.exists()]
