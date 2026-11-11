@@ -36,7 +36,7 @@ from typing import List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-from mgpy2.archetypes import TIERS, health_load_wh, household_load_wh, load_release, school_shape
+from mgpy2.archetypes import COOLING_REGIMES, TIERS, health_load_wh, household_load_wh, load_release, school_shape
 from mgpy2.paths import ensure_engines_importable
 
 PERIODS_PER_YEAR = 8760
@@ -87,6 +87,7 @@ class PrepConfig:
     periods: int = PERIODS_PER_YEAR
     csv_sep: str = ","
     csv_decimal: str = "."
+    allow_missing_cooling: bool = False   # see cooling_regime(); True only for pre-Nov-2026 samples
 
     def __post_init__(self) -> None:
         # Fail on a typo: compute_demand_kwh tests `mode == "thesis_faithful"`, so any other
@@ -94,6 +95,29 @@ class PrepConfig:
         if self.demand_growth_mode not in DEMAND_GROWTH_MODES:
             raise ValueError(f"demand_growth_mode={self.demand_growth_mode!r}; "
                              f"expected one of {DEMAND_GROWTH_MODES}.")
+
+
+def cooling_regime(row: dict, *, households: float, allow_missing: bool = False) -> str:
+    """The cluster's cooling class (NC, AY, OM, AS), checked.
+
+    A cluster with households must carry a valid class. Until Nov 2026 a missing class was
+    silently read as "no cooling"; that hid a wrong column in the sample generator (a
+    Koeppen-Geiger code read as a cooling class), which left 31 % of the population clusters
+    without a class and gave most of the others a wrong one. Clusters without households
+    (SCHOOL_*) have no household load, so their class is not used and may be missing.
+    `allow_missing=True` restores the old fallback, only to reproduce runs made before the fix.
+    """
+    raw = row.get("cooling")
+    value = "" if raw is None or pd.isna(raw) else str(raw).strip()
+    if value in COOLING_REGIMES:
+        return value
+    if households <= 0 or (allow_missing and value in ("", "nan", "NaN", "NA", "None")):
+        return "NC"
+    raise ValueError(
+        f"cluster {row.get('cat', '?')}: cooling class {raw!r} is not one of {COOLING_REGIMES} "
+        f"and the cluster has {households:.0f} households. Regenerate the sample with "
+        f"input_generator (classes from WorldClim Tmin/Tavg/Tmax), or set "
+        f"allow_missing_cooling=True to reproduce a pre-Nov-2026 run.")
 
 
 def year_labels(start_year: int, years: int) -> List[str]:
@@ -123,9 +147,8 @@ def compute_demand_kwh(row: dict, cfg: PrepConfig,
         except (TypeError, ValueError):
             return float(default)
 
-    cooling = row.get("cooling", "NC")
-    if pd.isna(cooling) or str(cooling).strip() in ("", "nan", "NaN", "NA", "None"):
-        cooling = "NC"
+    cooling = cooling_regime(row, households=sum(_num(f"h_tier{t}") for t in TIERS),
+                             allow_missing=cfg.allow_missing_cooling)
 
     faithful = (cfg.demand_growth_mode == "thesis_faithful")
     # In faithful mode the old apply_demand_growth (÷100) grows households/hospitals
