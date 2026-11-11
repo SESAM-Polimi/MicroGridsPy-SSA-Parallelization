@@ -1,0 +1,41 @@
+iso3,country,household_size,reference_year,data_source
+AGO,Angola,4.82,2016,DHS
+BDI,Burundi,4.83,2016,DHS
+BEN,Benin,5.19,2018,DHS
+BFA,Burkina Faso,5.92,2014,DHS
+BWA,Botswana,3.52,2011,IPUMS
+CAF,Central African Republic,5.59,2018,MICS
+CIV,Côte d’Ivoire,4.58,2016,MICS
+CMR,Cameroon,4.99,2018,DHS
+COD,Dem. Republic of the Congo,5.17,2017,MICS
+COG,Congo,4.22,2014,MICS
+DJI,Djibouti,5.89,2006,MICS
+ETH,Ethiopia,4.73,2019,DHS
+GAB,Gabon,4.1,2012,DHS
+GHA,Ghana,3.83,2019,DHS
+GIN,Guinea,6.39,2021,DHS
+GMB,Gambia,8.07,2020,DHS
+GNB,Guinea-Bissau,6.81,2018,MICS
+GNQ,Equatorial Guinea,5.3,2000,MICS
+KEN,Kenya,3.75,2020,DHS
+LBR,Liberia,4.58,2019,DHS
+LSO,Lesotho,3.73,2018,MICS
+MDG,Madagascar,4.5,2018,MICS
+MLI,Mali,5.81,2018,DHS
+MOZ,Mozambique,4.52,2018,DHS
+MRT,Mauritania,5.77,2015,MICS
+MWI,Malawi,4.28,2019,MICS
+NAM,Namibia,4.24,2013,DHS
+NER,Niger,5.92,2012,DHS
+NGA,Nigeria,4.66,2018,DHS
+RWA,Rwanda,4.28,2020,DHS
+SEN,Senegal,8.66,2017,DHS
+SLE,Sierra Leone,5.29,2019,DHS
+SWZ,Eswatini,4.04,2014,MICS
+TCD,Chad,5.97,2019,MICS
+TGO,Togo,4.35,2017,MICS
+TZA,United Republic of Tanzania,4.85,2015,DHS
+UGA,Uganda,4.87,2019,DHS
+ZAF,South Africa,3.36,2016,DHS
+ZMB,Zambia,5.0,2018,DHS
+ZWE,Zimbabwe,4.02,2019,MICS

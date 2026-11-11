@@ -30,7 +30,9 @@ WORLDCLIM_TMIN_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tmin.tif"
 WORLDCLIM_TMAX_RASTER = INPUT_ROOT / f"{COUNTRY}_wc2.1_30s_tmax.tif"
 RWI_RASTER = GLOBAL_ROOT / "rwi.tif"
 HDI_PATH = GLOBAL_ROOT / "hdi_values.csv"
-HOUSEHOLD_PATH = GLOBAL_ROOT / "household_number.csv"
+# Average household size per country: UN DESA (2022), Database on Household Size and Composition,
+# latest observation; built by build_household_size_table.py.
+HOUSEHOLD_PATH = GLOBAL_ROOT / "household_size_undesa2022.csv"
 OUTPUT_PATH = BASE_ROOT / "sample" / f"{COUNTRY}_sample.csv"
 POPULATION_THRESHOLD = 300
 CONNECTIVITY = 8
@@ -58,7 +60,7 @@ def load_country_tables():
         2 * (row.hdi_value - hdi_min) / (hdi_max - hdi_min) - 1
         for row in hdi.itertuples()
     }
-    sizes = household.set_index("Country Code")["Mean national"].dropna().to_dict()
+    sizes = household.set_index("iso3")["household_size"].dropna().to_dict()
     return adjustments, sizes
 
 
