@@ -43,23 +43,25 @@ Each row carries, among others: `cat`, `lat`, `lon`, `cooling`, household counts
 (`h_tier1` … `h_tier5`), hospital counts per level (`hospital_1` … `hospital_5`), and
 `school_total_demand` (annual school electricity use, Wh).
 
-How the rows were built (thesis §Methods, not re-run by this code; `sample_generation/`):
+How the rows were built (`sample_generation/input_generator.py`, see `sample_generation/README.md`):
 - clusters from GHSL settlements + WorldPop, plus independent `SCHOOL_*` clusters from
   JRC/UNICEF SEADB (schools > 250 m from any settlement);
-- households = population / national average household size, split into 5 tiers using the
-  Relative Wealth Index distribution;
-- health facilities from JRC, already classified by level;
+- households = population / national average household size (UN DESA 2022, latest
+  observation), split into 5 tiers using the Relative Wealth Index distribution;
+- health facilities from JRC: primary -> tier 1, first and secondary -> tier 2, tertiary ->
+  tier 3 of the health-facility archetypes;
 - `cooling`: which part of the year needs cooling: `AY` all year, `AS` April–September,
   `OM` October–March, `NC` none. Classes of Husein et al. (2024): mean monthly cooling degree
-  days at 26 °C above 90 in the half-year. Degree days from WorldClim 2.1 monthly Tmin, Tavg
-  and Tmax with the UK Met Office method (Falchetta & Mistry 2021, Table 1).
+  days at 26 °C above 90 in the half-year. Degree days from WorldClim 2.1 monthly Tmin and
+  Tmax with the UK Met Office method (Falchetta & Mistry 2021, Table 1), daily mean taken as
+  (Tmax + Tmin)/2.
   **Samples generated before November 2026 carry wrong classes**: the thesis generator read
   the Köppen-Geiger code (`climate_class`, 0–29) of the M-LED tables as if it were the cooling
   class (`cl_type`, 1–4), so savanna became "Oct–Mar", most other climates "NA", and "NA" was
   then run as no cooling. A household cluster without a valid class now stops the run
   (`input_prep.cooling_regime`); check a sample folder with `python hpc/check_samples.py`.
 
-Rules the code relies on: `cat` must be unique (checked 15 Sep: 53,239 unique in ETH);
+Rules the code relies on: `cat` must be unique and non-empty (`mgpy2/sample.load_sample` stops otherwise);
 rows starting with `//` are comments and are skipped.
 
 ---
