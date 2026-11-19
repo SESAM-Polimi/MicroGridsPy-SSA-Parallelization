@@ -242,6 +242,29 @@ def _download_pv_with_retry(res: ResourceParams):
 AMBIENT_TEMP_MIN_C = -60.0
 AMBIENT_TEMP_MAX_C = 70.0
 
+# Plausible annual mean capacity factor of a PV system anywhere in Sub-Saharan Africa. With this
+# module's own PV model on PVGIS TMY data, eight contrasting sites (Sahel, Namib, Nouakchott,
+# Kisangani, Libreville, Addis Ababa, Mt Kenya, Maseru) give 0.19-0.26 (checked 19 Nov 2026).
+# A value outside this range means a unit or scaling error (W read as kW gives 1000x), not a site.
+PV_CF_MEAN_MIN = 0.05
+PV_CF_MEAN_MAX = 0.35
+
+
+def check_capacity_factor(cf_year: np.ndarray, lat: float, lon: float) -> None:
+    """Stop if the hourly capacity factor of one year is unusable or implausible.
+
+    Two failures, each with its own message: non-finite values or no sun at all (PVGIS
+    failure), and an annual mean outside [PV_CF_MEAN_MIN, PV_CF_MEAN_MAX] (checklist C15).
+    Single hours are not capped at 1: Maseru (Lesotho) has 8 hours at up to 1.04.
+    """
+    where = f"PVGIS data for lat={lat} lon={lon}"
+    if not np.isfinite(cf_year).all() or cf_year.max() <= 0.0:
+        raise ValueError(f"{where} has no usable solar output.")
+    mean = float(cf_year.mean())
+    if not PV_CF_MEAN_MIN <= mean <= PV_CF_MEAN_MAX:
+        raise ValueError(f"{where}: annual mean capacity factor {mean:.3f} outside the plausible range "
+                         f"[{PV_CF_MEAN_MIN}, {PV_CF_MEAN_MAX}]: check units and the PVGIS request.")
+
 
 def compute_resource_and_temperature(res: ResourceParams, cfg: PrepConfig):
     """Return (cf, temperature_degC), each (periods, years). Typical year repeated across years.
@@ -266,8 +289,7 @@ def compute_resource_and_temperature(res: ResourceParams, cfg: PrepConfig):
     if cf_year.shape[0] != periods:
         raise ValueError(f"PVGIS returned {cf_year.shape[0]} periods, expected {periods}.")
     cf_year = np.clip(cf_year, 0.0, None)  # guard tiny negatives from temp term
-    if not np.isfinite(cf_year).all() or cf_year.max() <= 0.0:
-        raise ValueError(f"PVGIS data for lat={res.lat} lon={res.lon} has no usable solar output.")
+    check_capacity_factor(cf_year, res.lat, res.lon)
 
     temp_year = np.asarray(t_amb, dtype="float64").ravel()
     if temp_year.shape[0] != periods:
