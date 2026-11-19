@@ -141,11 +141,17 @@ def compute_demand_kwh(row: dict, cfg: PrepConfig,
     growth = cfg.demand_growth
 
     def _num(key, default=0):
+        # An empty cell means zero (school rows in the Nov 2026 samples leave the household and
+        # facility columns empty). pandas gives an empty cell as float NaN, not as a string, so
+        # test with pd.isna: comparing against the text "nan" let NaN through as a count.
         v = row.get(key, default)
+        if v is None or (isinstance(v, str) and v.strip() in ("", "nan", "NaN", "NA")):
+            return float(default)
         try:
-            return float(v) if v not in (None, "", "nan", "NaN") else float(default)
+            x = float(v)
         except (TypeError, ValueError):
             return float(default)
+        return float(default) if pd.isna(x) else x
 
     cooling = cooling_regime(row, households=sum(_num(f"h_tier{t}") for t in TIERS),
                              allow_missing=cfg.allow_missing_cooling)
