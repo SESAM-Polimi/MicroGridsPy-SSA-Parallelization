@@ -17,14 +17,14 @@ run in parallel locally or on an SGE HPC.
 │   └── paths.py           #   repo-relative, env-overridable paths
 ├── orchestrator.py        # LOCAL parallel runner (ProcessPool)
 ├── hpc/                   # SGE job-array scripts (submit / rerun / monitor)
-├── sample_generation/     # build advanced_sample.csv (GIS; unchanged from thesis)
+├── sample_generation/     # build advanced_sample.csv from GIS layers (see its README)
 ├── engines/
 │   ├── new/               # MicroGridsPy Updated (package `core`) — the solver
 │   └── old/               # MicroGridsPy-Development_Linopy-2 (package `microgridspy`)
 │                          #   — REQUIRED: provides archetype demand + PVGIS code
 ├── data/
 │   ├── data_sheet/        # School_weights.csv, hdi_values.csv, a.yaml (reference), ...
-│   ├── sample_input_2025/ # per-country inputs
+│   ├── sample_input_2025/ # per-country samples (39 countries; SLE pending)
 │   └── thesis_results_2026/  # thesis output samples (validation reference)
 └── projects/              # per-cluster inputs+results (runtime output)
 ```

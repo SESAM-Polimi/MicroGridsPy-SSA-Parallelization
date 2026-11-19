@@ -80,8 +80,8 @@ old convention is gone. Task *N* always means row *N* of the sample as read by
 ```bash
 python -m mgpy2.sample "$SAMPLE_CSV"      # prints the number of tasks
 ```
-(Only regenerate from raw GIS with `sample_generation/` if you must — those scripts
-still contain hardcoded `/Users/matteo/...` paths and need editing first.)
+(To regenerate a sample from the GIS layers, see `sample_generation/README.md`; it runs on a
+machine with geopandas, not on the cluster.)
 
 ## 5. Submit the whole country
 
@@ -118,7 +118,7 @@ investment, sizing; `dispatch.parquet`); the full result set is rebuilt offline 
 |---|---|---|
 | `mgpy2/` | none | ✅ all via `paths.py` (+ `MGPY2_*` env overrides) |
 | `hpc/env.sh` | `CONDA_BASE`, queue, nodes, `SAMPLE_CSV` | **edit once** for your account/site/country |
-| `sample_generation/*.py` | `/Users/matteo/...` | only if regenerating samples; otherwise ignore |
+| `sample_generation/input_generator.py` | `--inputs` / `MGPY2_SAMPLE_INPUTS` | only if regenerating samples |
 
 ## What was improved vs the original .sh
 
