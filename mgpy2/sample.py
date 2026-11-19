@@ -41,7 +41,28 @@ def load_sample(path: Path) -> pd.DataFrame:
     is_comment = df.iloc[:, 0].astype(str).str.startswith("//")
     df = df[~is_comment].reset_index(drop=True)
     df.index = df.index + 1
+    check_unique_ids(df, path)
     return df
+
+
+def check_unique_ids(df: pd.DataFrame, path: Path | str = "sample") -> None:
+    """Stop if a cluster id (cat) is missing or appears twice.
+
+    Results are stored per cat (projects/<cat>/results), so two rows with the same id would
+    write into the same folder: the second solve overwrites the first, or skip-if-done skips
+    it, and one cluster silently disappears from the results.
+    """
+    if "cat" not in df.columns:
+        raise SystemExit(f"{path}: no 'cat' column (cluster id).")
+    ids = df["cat"].astype(str).str.strip()
+    blank = df.index[ids.isin(["", "nan"])].tolist()
+    if blank:
+        raise SystemExit(f"{path}: rows without a cluster id (task ids {blank[:5]}).")
+    repeated = ids[ids.duplicated(keep=False)]
+    if not repeated.empty:
+        first = repeated.groupby(repeated).apply(lambda s: s.index.tolist()).head(5).to_dict()
+        raise SystemExit(f"{path}: {repeated.nunique()} cluster id(s) appear more than once, "
+                         f"e.g. (cat: task ids) {first}. Fix the sample before running.")
 
 
 def row_for_task(df: pd.DataFrame, task_id: int) -> dict:
