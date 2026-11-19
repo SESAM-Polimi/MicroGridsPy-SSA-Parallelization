@@ -34,3 +34,10 @@ engines/new/projects/*/
 # comparison runs (hpc/make_compare_list.py + submit_rerun_array.sh)
 /compare/
 /compare_tasks.txt
+
+# editor and OS leftovers (checklist I07)
+~$*
+desktop.ini
+Thumbs.db
+*.bak
+*.bak[0-9]
