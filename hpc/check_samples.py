@@ -3,6 +3,7 @@
 
     python hpc/check_samples.py                      # data/sample_input_2025/*/advanced_sample.csv
     python hpc/check_samples.py path/to/samples      # any folder of *.csv, searched recursively
+    python hpc/check_samples.py path/to/one.csv      # a single sample file
 
 Exit status 1 if any household cluster lacks a valid class (NC, AY, OM, AS), so the check can
 gate a submission. Run it before every production run and after regenerating samples.
@@ -33,11 +34,11 @@ def check(path: Path) -> dict:
 
 def main(argv: list[str]) -> int:
     root = Path(argv[1]) if len(argv) > 1 else Path(__file__).resolve().parents[1] / "data" / "sample_input_2025"
-    files = sorted(root.rglob("*.csv"))
+    files = [root] if root.is_file() else sorted(root.rglob("*.csv"))
     if not files:
         sys.exit(f"no csv files under {root}")
     table = pd.DataFrame([check(f) for f in files])
-    table["file"] = table["file"].str.replace(str(root) + "/", "", regex=False)
+    table["file"] = table["file"].str.replace(str(root if root.is_dir() else root.parent) + "/", "", regex=False)
     print(table.to_string(index=False))
     bad, total = int(table.without_class.sum()), int(table.household_clusters.sum())
     print(f"\nhousehold clusters without a valid cooling class: {bad:,} of {total:,}")
