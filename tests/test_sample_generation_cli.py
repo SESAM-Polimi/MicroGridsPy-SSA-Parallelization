@@ -17,7 +17,7 @@ import input_generator as gen   # noqa: E402
 def test_paths_follow_the_country(tmp_path):
     inputs = gen.CountryInputs.for_country(tmp_path, "KEN")
     assert inputs.gadm == tmp_path / "Input" / "KEN" / "gadm41_KEN.gpkg"
-    assert inputs.worldpop.name == "ken_pop_2020_CN_1km_R2025A_UA_v1.tif"
+    assert inputs.worldpop.name == "ken_pop_2025_CN_1km_R2025A_UA_v1.tif"
     assert inputs.rwi == tmp_path / "Global" / "rwi.tif"
     assert len(inputs.missing()) == 7                       # nothing exists yet
 
@@ -52,3 +52,17 @@ def test_provenance_lists_every_existing_input(tmp_path):
     assert record["inputs"]["gadm"]["sha256"] == gen.sha256(inputs.gadm)
     assert {"hdi_table", "household_size_table"} <= set(record["inputs"])
     assert "worldpop" not in record["inputs"]                 # absent files are not listed
+
+
+def test_worldpop_year_matches_the_ghsl_epoch():
+    """GHSL clusters carry 2025 population; SPARSE clusters must come from the same year."""
+    assert gen.WORLDPOP_YEAR == 2025
+    assert gen.worldpop_filename("SLE") == "sle_pop_2025_CN_1km_R2025A_UA_v1.tif"
+
+
+def test_fetch_url_matches_the_file_the_generator_reads(tmp_path):
+    import fetch_worldpop as fetch
+    url = fetch.worldpop_url("sle")
+    assert url == ("https://data.worldpop.org/GIS/Population/Global_2015_2030/R2025A/2025/SLE/v1/"
+                   "1km_ua/constrained/sle_pop_2025_CN_1km_R2025A_UA_v1.tif")
+    assert url.endswith("/" + gen.CountryInputs.for_country(tmp_path, "SLE").worldpop.name)
