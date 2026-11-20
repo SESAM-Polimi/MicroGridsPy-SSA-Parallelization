@@ -11,7 +11,12 @@ python sample_generation/input_generator.py ZWE KEN --inputs /path/to/input_gene
 `--inputs` (or `$MGPY2_SAMPLE_INPUTS`) is a folder laid out like `input_generator/` on branch
 `input`: `Input/{ISO}/...` per country and `Global/rwi.tif`. These ~3 GB are not in this
 repository (to be published on Zenodo, checklist I05). Each country also needs
-`Input/{ISO}/{ISO}_wc2.1_30s_tmin.tif` and `..._tmax.tif` (WorldClim 2.1, 12 bands).
+`Input/{ISO}/{ISO}_wc2.1_30s_tmin.tif` and `..._tmax.tif` (WorldClim 2.1, 12 bands) and the
+WorldPop 2025 layer, which `fetch_worldpop.py` downloads:
+
+```
+python sample_generation/fetch_worldpop.py AGO SLE --inputs /path/to/input_generator
+```
 Needs geopandas, rasterio, fiona, scipy and shapely, which the cluster environment does not have.
 
 | File | What |
@@ -19,7 +24,8 @@ Needs geopandas, rasterio, fiona, scipy and shapely, which the cluster environme
 | `input_generator.py` | the generator (Matteo Pieraccini, Nov 2026) |
 | `tables/household_size_undesa2022.csv` | household size, UN DESA (2022) latest observation per country |
 | `build_household_size_table.py` | rebuilds that table from the UN workbook |
-| `tables/hdi_values.csv` | HDI per country, used to shift the wealth distribution. Source and year still to be documented (checklist C24) |
+| `fetch_worldpop.py` | downloads WorldPop R2025A (constrained, UN-adjusted, 1 km) for the year `WORLDPOP_YEAR` |
+| `tables/hdi_values.csv` | HDI per country, used to shift the wealth distribution: UNDP Human Development Report 2025, Statistical Annex Table 1, HDI 2023 |
 | `history/` | one-off patches used on 11 Nov 2026 to update the committed samples; not for reruns |
 
 ## What the committed samples are
@@ -30,6 +36,10 @@ in place on 11 Nov 2026:
 - `cooling`: Met Office CDD26 from WorldClim 2.1 monthly Tmin/Tmax at 30 arc-sec, Husein et al.
   (2024) classes (`history/patch_cooling_column.py`);
 - `h_tier1..5`: households from UN DESA household size (`history/patch_household_tiers.py`).
+
+Population year: the GHSL clusters carry the GHS-POP R2023A 2025 population, while the SPARSE
+clusters of the committed samples come from WorldPop 2020. From 20 Nov 2026 the generator reads
+WorldPop 2025 (`WORLDPOP_YEAR`), so both layers use the same year once the samples are regenerated.
 
 Sierra Leone is not in `data/sample_input_2025` until Matteo regenerates it (checklist I09): its
 2025 sample had the old cooling, hospital and household columns.
