@@ -1,0 +1,53 @@
+{
+  "country": "UGA",
+  "generated_utc": "2026-11-23T17:40:30+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 21952,
+  "inputs": {
+    "ghsl": {
+      "file": "UGA_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 18409870,
+      "sha256": "ba4f3c28b8e5f1e2e172b193ece8d6370208089cbc460c416376b519e80533be"
+    },
+    "schools": {
+      "file": "schools_UGA.gpkg",
+      "bytes": 2953216,
+      "sha256": "797b572c38430f759f621aa0aec01a4bd30e550a04caa1b98ea154d89a63a6cc"
+    },
+    "gadm": {
+      "file": "gadm41_UGA.gpkg",
+      "bytes": 58327040,
+      "sha256": "ace7897b2cb3b38f7150c82975a4dd421cc63f7b736a7c488c827963998422c2"
+    },
+    "worldpop": {
+      "file": "uga_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 1023553,
+      "sha256": "385b733870ee4cc1e64edb72ffbc5588be631eed6332ad5be8b3c3a6d7e14ceb"
+    },
+    "tmin": {
+      "file": "UGA_wc2.1_30s_tmin.tif",
+      "bytes": 4093029,
+      "sha256": "026bfdffa68010d82b37a47daa82df684bada036b954d20dd8abc79db0200337"
+    },
+    "tmax": {
+      "file": "UGA_wc2.1_30s_tmax.tif",
+      "bytes": 4812874,
+      "sha256": "b9540c487e7525c0c7a1f3901e476c19b030f26b3b39815519d925d316e8d3d2"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

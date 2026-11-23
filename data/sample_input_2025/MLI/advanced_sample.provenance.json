@@ -1,0 +1,53 @@
+{
+  "country": "MLI",
+  "generated_utc": "2026-11-23T17:35:25+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 9965,
+  "inputs": {
+    "ghsl": {
+      "file": "MLI_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 8066592,
+      "sha256": "5c3da8d6149e998f241cfcc163eb4c75b6dda285d9128bd2838d45a7bc0d0c5d"
+    },
+    "schools": {
+      "file": "schools_MLI.gpkg",
+      "bytes": 1097728,
+      "sha256": "dcbe38c1a81d8494ba2ae1f7463a4304635ff2fb18552342697762ce27c7c00f"
+    },
+    "gadm": {
+      "file": "gadm41_MLI.gpkg",
+      "bytes": 5558272,
+      "sha256": "c3b05accbc4fdb73dcc5ac6dae75196e7ff30739a2b583d3d871f2d0904cc5c7"
+    },
+    "worldpop": {
+      "file": "mli_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 1528191,
+      "sha256": "a88e3aea6e28516ead0adfbea9305e61b6c46eef51f0b4bfef8930a938426acd"
+    },
+    "tmin": {
+      "file": "MLI_wc2.1_30s_tmin.tif",
+      "bytes": 20370334,
+      "sha256": "33edd1e6caa33733e66777ee8ba88820de5e22debff054fc5fc2a53badf40e3f"
+    },
+    "tmax": {
+      "file": "MLI_wc2.1_30s_tmax.tif",
+      "bytes": 22997940,
+      "sha256": "b4ba5a2d7a448c10ad4256dfdb3f5b90e74f5d6d07cac9c5bf1f2966896ed628"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

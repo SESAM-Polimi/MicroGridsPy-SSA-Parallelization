@@ -1,0 +1,53 @@
+{
+  "country": "DJI",
+  "generated_utc": "2026-11-23T17:31:20+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 141,
+  "inputs": {
+    "ghsl": {
+      "file": "DJI_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 183970,
+      "sha256": "0a9fd078e608a48fdd99282ec0ce45351b6794cde2f89b1e97e15c48301ad51f"
+    },
+    "schools": {
+      "file": "schools_DJI.gpkg",
+      "bytes": 114688,
+      "sha256": "0b70110c32ec7f1adafd63a8da5139af18045b0fe0f03b4eb050dd370c498be4"
+    },
+    "gadm": {
+      "file": "gadm41_DJI.gpkg",
+      "bytes": 729088,
+      "sha256": "a04f1ce4ba005ef94b58a3e46c6a19a11960ae0148d12ac09d59bef2bd5e4212"
+    },
+    "worldpop": {
+      "file": "dji_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 64480,
+      "sha256": "52361c3bd43a979af572921457a9a87541e2f468796a7ba76978e44507c5c6f2"
+    },
+    "tmin": {
+      "file": "DJI_wc2.1_30s_tmin.tif",
+      "bytes": 801236,
+      "sha256": "b82384c41e1e1f4020e72a27aedf6a06da39690bfe324efb5b811b77df1784fb"
+    },
+    "tmax": {
+      "file": "DJI_wc2.1_30s_tmax.tif",
+      "bytes": 813151,
+      "sha256": "569c34f213e86e1ed80a7d92d976a852bca2249998080880c3107c9d716903f2"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

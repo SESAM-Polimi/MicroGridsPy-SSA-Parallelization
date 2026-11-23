@@ -1,0 +1,53 @@
+{
+  "country": "AGO",
+  "generated_utc": "2026-11-23T17:27:48+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 9637,
+  "inputs": {
+    "ghsl": {
+      "file": "AGO_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 5269059,
+      "sha256": "e13f855701665a11876e6e33b93f9d020ccc620b07b3173a2e075051440087c8"
+    },
+    "schools": {
+      "file": "schools_AGO.gpkg",
+      "bytes": 1159168,
+      "sha256": "70df2def23d2807a54ca43bfed86a73dabcfcfa695c873d2a599eff8fc9df55c"
+    },
+    "gadm": {
+      "file": "gadm41_AGO.gpkg",
+      "bytes": 2699264,
+      "sha256": "fb4a828647fc84ec6257938516861f36a2361b4e842f1dcfa46b22438eb70113"
+    },
+    "worldpop": {
+      "file": "ago_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 2284960,
+      "sha256": "a6f6d22533a259c0566396237fc1cc5534af2ff041825512f12d394f9a4aead7"
+    },
+    "tmin": {
+      "file": "AGO_wc2.1_30s_tmin.tif",
+      "bytes": 18538837,
+      "sha256": "c2b03257a15c80bf42411a43f25b3cb43e73408f90d809771256f27670074484"
+    },
+    "tmax": {
+      "file": "AGO_wc2.1_30s_tmax.tif",
+      "bytes": 21424965,
+      "sha256": "a8545318e922b36f0a4aceedb67ab82d097fb99872a2c384719c50f3fc12b1e2"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

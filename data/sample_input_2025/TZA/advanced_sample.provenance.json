@@ -1,0 +1,53 @@
+{
+  "country": "TZA",
+  "generated_utc": "2026-11-23T17:40:08+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 25207,
+  "inputs": {
+    "ghsl": {
+      "file": "TZA_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 18261285,
+      "sha256": "dbd582119bc5509a6cb564294cad274aa3122a8e029ff08fe992aea101731931"
+    },
+    "schools": {
+      "file": "schools_TZA.gpkg",
+      "bytes": 3375104,
+      "sha256": "ddb3928bfb582dd32f4e8fbda031c63ea4199e07e9146d2bee09c5f166e760d4"
+    },
+    "gadm": {
+      "file": "gadm41_TZA.gpkg",
+      "bytes": 37036032,
+      "sha256": "b2a0eea615ada69746cdba719e4998876395da354fe67e307df3789b56e091ba"
+    },
+    "worldpop": {
+      "file": "tza_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 3413556,
+      "sha256": "16d4f5a225eb5890737be055fe8af882af8d8ae5f7b748f2105f65b61f8c816d"
+    },
+    "tmin": {
+      "file": "TZA_wc2.1_30s_tmin.tif",
+      "bytes": 16142411,
+      "sha256": "2572587f6a17752d46e67913c4c0be64265340dd28eefde591027bd8135152bc"
+    },
+    "tmax": {
+      "file": "TZA_wc2.1_30s_tmax.tif",
+      "bytes": 17914336,
+      "sha256": "cb6c422f09c79465446632e70cabc3ebf4d23c208b1c36b84bc02af3a4c2ad05"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "country": "GNB",
+  "generated_utc": "2026-11-23T17:33:59+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 504,
+  "inputs": {
+    "ghsl": {
+      "file": "GNB_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 414391,
+      "sha256": "d099b9b8e3c7807c54f51d71224ebbcefeb6343a6b983ccd9e92d1f7a534cb1e"
+    },
+    "schools": {
+      "file": "schools_GNB.gpkg",
+      "bytes": 98304,
+      "sha256": "91ba5836fb3042195e811b6f51e594d771fc764f9bf0b00b78c87b1a018404be"
+    },
+    "gadm": {
+      "file": "gadm41_GNB.gpkg",
+      "bytes": 4759552,
+      "sha256": "ca990ac1f77c0c545180b02506f2aa7611e3a30f2cc9a4c3d643bc2748db8ac9"
+    },
+    "worldpop": {
+      "file": "gnb_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 121211,
+      "sha256": "46cb2d4c1ec49e6bf9f305f9070c84a979c10bcb3a8a864b90aef918f2e18e9c"
+    },
+    "tmin": {
+      "file": "GNB_wc2.1_30s_tmin.tif",
+      "bytes": 674620,
+      "sha256": "c4797dc55bc69b5f283f6e780761ba32d02c96e25d256fbc1dd1252fdc9d95b6"
+    },
+    "tmax": {
+      "file": "GNB_wc2.1_30s_tmax.tif",
+      "bytes": 807957,
+      "sha256": "07d5f8337a7d092f06e8ad4a183420d63e12f9922535d145562d8b2018b828af"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

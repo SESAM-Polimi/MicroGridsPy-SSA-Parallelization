@@ -1,0 +1,53 @@
+{
+  "country": "ZAF",
+  "generated_utc": "2026-11-23T17:42:13+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 22314,
+  "inputs": {
+    "ghsl": {
+      "file": "ZAF_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 12144150,
+      "sha256": "ad42ea89129dc573719f09f09f550357acd2541156e4fc307ee4b321db01cd1a"
+    },
+    "schools": {
+      "file": "schools_ZAF.gpkg",
+      "bytes": 3039232,
+      "sha256": "9071e0a4ee6125787d4042feb70a309f91f617ec73d4917c7874b71843656852"
+    },
+    "gadm": {
+      "file": "gadm41_ZAF.gpkg",
+      "bytes": 95379456,
+      "sha256": "ddad6ecf96246d7c54842193c0302979053bc13245a04d7b4a134e0d88df005a"
+    },
+    "worldpop": {
+      "file": "zaf_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 4162664,
+      "sha256": "c9cc726263aa9500551d957c105635c3b7e8009614fa330f51ea23d7952714cf"
+    },
+    "tmin": {
+      "file": "ZAF_wc2.1_30s_tmin.tif",
+      "bytes": 22556273,
+      "sha256": "30447461ab0f770a0f69b36d8076d13e6a8e6d2048cbdb41b6333a49f39c43f1"
+    },
+    "tmax": {
+      "file": "ZAF_wc2.1_30s_tmax.tif",
+      "bytes": 24238891,
+      "sha256": "4479765d0bbda9202d8d48b41b016c2e7b13c08b14daaa9aab49279a8de81f49"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}
