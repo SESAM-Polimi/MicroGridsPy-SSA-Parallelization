@@ -1,0 +1,53 @@
+{
+  "country": "LSO",
+  "generated_utc": "2026-11-23T17:34:34+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 1554,
+  "inputs": {
+    "ghsl": {
+      "file": "LSO_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 1231665,
+      "sha256": "6483a4435b2c022b3e49c718108a33da2d027f2b9a42fa6dd59427fa129559b7"
+    },
+    "schools": {
+      "file": "schools_LSO.gpkg",
+      "bytes": 262144,
+      "sha256": "eafe6643597e5d2c35a1a7cfde7e246cb3de41738442de180eed10e1510c6b09"
+    },
+    "gadm": {
+      "file": "gadm41_LSO.gpkg",
+      "bytes": 1159168,
+      "sha256": "85907f46556b849cc1335d603d2fb846d6f46da8039a8d343cf7abe674e66b8a"
+    },
+    "worldpop": {
+      "file": "lso_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 179473,
+      "sha256": "742f4e6528591f54cd31d30e4097fa56827f05040bf4f6c4130abd80c5669113"
+    },
+    "tmin": {
+      "file": "LSO_wc2.1_30s_tmin.tif",
+      "bytes": 1304889,
+      "sha256": "5e9dd47611085bb40671042becfbe9e76ffe3d4aa227e48c8b681e1f70fb27d2"
+    },
+    "tmax": {
+      "file": "LSO_wc2.1_30s_tmax.tif",
+      "bytes": 1385001,
+      "sha256": "c4b3818ebf55088daa65bfa07cb3fe904362ef4d4708a1e239aaa770ff7e8891"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

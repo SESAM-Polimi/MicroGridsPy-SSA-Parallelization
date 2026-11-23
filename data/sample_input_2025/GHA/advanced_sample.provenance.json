@@ -1,0 +1,53 @@
+{
+  "country": "GHA",
+  "generated_utc": "2026-11-23T17:33:48+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 9738,
+  "inputs": {
+    "ghsl": {
+      "file": "GHA_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 9235561,
+      "sha256": "862bb82b5f9505e35c78beb9e0ea87adfa85f8b81010b6d5f02acd6fff59aea0"
+    },
+    "schools": {
+      "file": "schools_GHA.gpkg",
+      "bytes": 4145152,
+      "sha256": "96d476161dca518ddadb7bfbcaef86af1fb29f9e78cd5df3dcc2a6b55320c7d7"
+    },
+    "gadm": {
+      "file": "gadm41_GHA.gpkg",
+      "bytes": 14987264,
+      "sha256": "aa805dc2f4ae98a558ea89b6bbf47bc0de3f7d4d7b1ab6368421453653e2c5ca"
+    },
+    "worldpop": {
+      "file": "gha_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 1061774,
+      "sha256": "7962fd8923c77e3e78e09ce346f16a4c9ae57f8fd86f9f65677db7c9a194d876"
+    },
+    "tmin": {
+      "file": "GHA_wc2.1_30s_tmin.tif",
+      "bytes": 3079404,
+      "sha256": "22a1375701fbe38b5520f0c356a6e9e79d086c38d8fec8c8b77dbfe15e8d1736"
+    },
+    "tmax": {
+      "file": "GHA_wc2.1_30s_tmax.tif",
+      "bytes": 3774326,
+      "sha256": "f0eca8ef7a155e29f9947cf190d4e61c586ce74259495d7ad0cb3951b7d17be9"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

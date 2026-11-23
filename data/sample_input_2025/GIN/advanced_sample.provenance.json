@@ -1,0 +1,53 @@
+{
+  "country": "GIN",
+  "generated_utc": "2026-11-23T17:33:56+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 6438,
+  "inputs": {
+    "ghsl": {
+      "file": "GIN_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 2783234,
+      "sha256": "b2911ea76d1fa6cb9667f0c035bb1a3ff2165f0b27d99d3753c5232109dc9878"
+    },
+    "schools": {
+      "file": "schools_GIN.gpkg",
+      "bytes": 1425408,
+      "sha256": "8882e7deed958c5bd809d9abfe4c7258542b43a0aea8930548d48b7a1f3a6973"
+    },
+    "gadm": {
+      "file": "gadm41_GIN.gpkg",
+      "bytes": 4259840,
+      "sha256": "3b44747e105ca61269e643209a65820b3288bcb0398069669ca76e9ce6cb56d0"
+    },
+    "worldpop": {
+      "file": "gin_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 942503,
+      "sha256": "08ce1d9af0d5cc8babe5d7b3ba7315c2628db3ba2d83e68fb4c6aea048ffd8aa"
+    },
+    "tmin": {
+      "file": "GIN_wc2.1_30s_tmin.tif",
+      "bytes": 4993152,
+      "sha256": "0c280d7601954ca9ef104e7470308ceda47a466f058991aae6bafd4c480f9acc"
+    },
+    "tmax": {
+      "file": "GIN_wc2.1_30s_tmax.tif",
+      "bytes": 5426666,
+      "sha256": "90b2b72e56fe703a31d113ca45e5d04da2c788c2cfbc48802ae051aafed16236"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "country": "ZMB",
+  "generated_utc": "2026-11-23T17:42:24+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 8801,
+  "inputs": {
+    "ghsl": {
+      "file": "ZMB_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 4138505,
+      "sha256": "43a24a166507f485b39abcd5ca99c5c0b5aff0890dfd83dfec0a696b3f7441aa"
+    },
+    "schools": {
+      "file": "schools_ZMB.gpkg",
+      "bytes": 1044480,
+      "sha256": "6b2d78ca9a9ba760161d4ead087957a928d1d3205ac2dda3ca0eb62a49ef1d51"
+    },
+    "gadm": {
+      "file": "gadm41_ZMB.gpkg",
+      "bytes": 5124096,
+      "sha256": "a9bf46cf8b7070762d68dfe0abd9e0c6a7cf415c0c739380d20333a9eb9cc418"
+    },
+    "worldpop": {
+      "file": "zmb_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 2161479,
+      "sha256": "688ff8df3aa3c4130f4049b01bf57c905eebfcca52de614feda320ecf38bf25b"
+    },
+    "tmin": {
+      "file": "ZMB_wc2.1_30s_tmin.tif",
+      "bytes": 15310521,
+      "sha256": "194ed2781a8b627bc2f875561905b8a2c2e742a21683055c2119c616aedf4060"
+    },
+    "tmax": {
+      "file": "ZMB_wc2.1_30s_tmax.tif",
+      "bytes": 17597742,
+      "sha256": "b94cf3d91a84e6184c1c27473c8af611baf303899b3a1b78774e299e6bd6a25c"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

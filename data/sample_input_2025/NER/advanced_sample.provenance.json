@@ -1,0 +1,53 @@
+{
+  "country": "NER",
+  "generated_utc": "2026-11-23T17:36:35+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 11298,
+  "inputs": {
+    "ghsl": {
+      "file": "NER_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 8401464,
+      "sha256": "2b90d371e4488755df7d07cbbbfa3fe6de2915c382cfb61fb0a3528c54b86e56"
+    },
+    "schools": {
+      "file": "schools_NER.gpkg",
+      "bytes": 880640,
+      "sha256": "1e719ea4958bef43cfac270345f45233143b75c6e2bf587705cfb2c06197ea44"
+    },
+    "gadm": {
+      "file": "gadm41_NER.gpkg",
+      "bytes": 1073152,
+      "sha256": "b5b8998ae267914f596e0a6b0aff4e01c89248ba7e8034153517b44e790197f1"
+    },
+    "worldpop": {
+      "file": "ner_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 1802657,
+      "sha256": "42d8736f57f89a3d87a818fb12953a9dcc4c43ba2a0122e5aecbadf30dfb7419"
+    },
+    "tmin": {
+      "file": "NER_wc2.1_30s_tmin.tif",
+      "bytes": 15193935,
+      "sha256": "b20627e1fa6f2f131e9f58db3d4b6c9cc61e636d9902ba8d374fee395933b757"
+    },
+    "tmax": {
+      "file": "NER_wc2.1_30s_tmax.tif",
+      "bytes": 17350339,
+      "sha256": "da84be44edebb865dbbedc67edd1b23bae8863b8ad66eba2b83149a2a59aabaf"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

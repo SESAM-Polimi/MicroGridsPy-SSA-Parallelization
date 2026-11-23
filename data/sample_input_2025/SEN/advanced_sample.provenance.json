@@ -1,0 +1,53 @@
+{
+  "country": "SEN",
+  "generated_utc": "2026-11-23T17:38:49+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 3932,
+  "inputs": {
+    "ghsl": {
+      "file": "SEN_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 4801967,
+      "sha256": "9793e4f6ed58da50794c6619f0aad849023a3a1d474bb56f87858501f2f9d1b1"
+    },
+    "schools": {
+      "file": "schools_SEN.gpkg",
+      "bytes": 315392,
+      "sha256": "899e0a50a78938d444d1c0bde209ed68154af55d4bae6bbe0595905bba7b56b1"
+    },
+    "gadm": {
+      "file": "gadm41_SEN.gpkg",
+      "bytes": 6356992,
+      "sha256": "9885f8b5091828d7e791fb9b1819e2e2238f70b4ce4c28584df08643448642db"
+    },
+    "worldpop": {
+      "file": "sen_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 687053,
+      "sha256": "eb879e848f928d8dc8c4fa8682619d0891cafb7da43cc0b20722ddcd876f61dd"
+    },
+    "tmin": {
+      "file": "SEN_wc2.1_30s_tmin.tif",
+      "bytes": 2684970,
+      "sha256": "a22b4a30f6429776d496fe6a47b97db456de4c2d7b3b2e0b89b4a7fafa519a5e"
+    },
+    "tmax": {
+      "file": "SEN_wc2.1_30s_tmax.tif",
+      "bytes": 3294137,
+      "sha256": "da8bfa4f6da0426c4e915def68703b7e2dedddabe717a8f7dbea577e9411395d"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

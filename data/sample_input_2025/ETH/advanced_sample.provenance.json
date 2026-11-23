@@ -1,0 +1,53 @@
+{
+  "country": "ETH",
+  "generated_utc": "2026-11-23T17:33:06+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 53350,
+  "inputs": {
+    "ghsl": {
+      "file": "ETH_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 26660177,
+      "sha256": "e50f1994bd44a23e598998eab7c58c2666f4a0fa7d618e1d84bbcea773f71f6f"
+    },
+    "schools": {
+      "file": "schools_ETH.gpkg",
+      "bytes": 5980160,
+      "sha256": "88c196d9f80f7a4b5272ea38e8865e172f6e55a31b19f4ffb884c85137b7b318"
+    },
+    "gadm": {
+      "file": "gadm41_ETH.gpkg",
+      "bytes": 2895872,
+      "sha256": "aff5818b5e5e319b4f9d09298f57b5ffe75d6defdcca6fab412968dd5b319298"
+    },
+    "worldpop": {
+      "file": "eth_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 4000120,
+      "sha256": "3158bd349734527ca41599e3b79430c2ca10533c18c928f1dbf08de4a95587c4"
+    },
+    "tmin": {
+      "file": "ETH_wc2.1_30s_tmin.tif",
+      "bytes": 22766278,
+      "sha256": "c41b6e0f1932f83f42f1bafdaeb7ad0886a28a6c362fa409c1bfc00768393505"
+    },
+    "tmax": {
+      "file": "ETH_wc2.1_30s_tmax.tif",
+      "bytes": 25373763,
+      "sha256": "1a26b6e88e46946a32bd32e7f146aa2ba7cab0c2331e8fc6f3abe76b3c247330"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

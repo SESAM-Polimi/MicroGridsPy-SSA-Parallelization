@@ -1,0 +1,53 @@
+{
+  "country": "SLE",
+  "generated_utc": "2026-11-23T17:38:55+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 6946,
+  "inputs": {
+    "ghsl": {
+      "file": "SLE_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 1315590,
+      "sha256": "9afd51e886ba8ca3369867bf27ac2d93acfe764fe720de78c03c07d86178e4d3"
+    },
+    "schools": {
+      "file": "schools_SLE.gpkg",
+      "bytes": 1069056,
+      "sha256": "e4f7435682bdeb93917609fae38823b38e20adae6e7af98a59a8014b0c2e2dec"
+    },
+    "gadm": {
+      "file": "gadm41_SLE.gpkg",
+      "bytes": 3706880,
+      "sha256": "debb1ec4d08322668f469db1daac11ebf97f66da6a64d2ef7f5ec7611208369e"
+    },
+    "worldpop": {
+      "file": "sle_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 321255,
+      "sha256": "cf9728fe93bb50bc254e536b96a8ab2aba4dfc3a7da2cd5afa5150fcf32de102"
+    },
+    "tmin": {
+      "file": "SLE_wc2.1_30s_tmin.tif",
+      "bytes": 1501334,
+      "sha256": "d132caf14ec71aa3edde61f1c7114fa82535b34d8673acdfe72b2d11821d1fb7"
+    },
+    "tmax": {
+      "file": "SLE_wc2.1_30s_tmax.tif",
+      "bytes": 1590135,
+      "sha256": "ded78403779c090a0b104b9140ad85e6789ebf647c0d0095ae35e907c1e7fb45"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "country": "CIV",
+  "generated_utc": "2026-11-23T17:28:20+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 6645,
+  "inputs": {
+    "ghsl": {
+      "file": "CIV_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 6573244,
+      "sha256": "f6027da67e9837fb41b81923dd55e4a0ab37ede233da63129ea3634b46980eaf"
+    },
+    "schools": {
+      "file": "schools_CIV.gpkg",
+      "bytes": 380928,
+      "sha256": "d22fb1df5d7017b5898650379e569a5a28461f2d47c86c07be6252a1e7eb711a"
+    },
+    "gadm": {
+      "file": "gadm41_CIV.gpkg",
+      "bytes": 3964928,
+      "sha256": "ca326ff7e94f44d9734322382c64c32eb96c1321471adbef8dc79a49b30f28b3"
+    },
+    "worldpop": {
+      "file": "civ_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 1363258,
+      "sha256": "5e83916c31120099637b42ba2b86fb4ccd78390a21cfee181122a1c6dee31f04"
+    },
+    "tmin": {
+      "file": "CIV_wc2.1_30s_tmin.tif",
+      "bytes": 4171840,
+      "sha256": "72d83444766082d5dd11cfdda798bfe0ba2092049efc11dd4dff90559770209d"
+    },
+    "tmax": {
+      "file": "CIV_wc2.1_30s_tmax.tif",
+      "bytes": 4698204,
+      "sha256": "dd9c98d092d8367a16f612fd6f93d508b578ff6c121efbef225c7017cea9dfda"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

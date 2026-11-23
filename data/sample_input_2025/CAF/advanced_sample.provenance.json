@@ -1,0 +1,53 @@
+{
+  "country": "CAF",
+  "generated_utc": "2026-11-23T17:28:10+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 2019,
+  "inputs": {
+    "ghsl": {
+      "file": "CAF_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 2107338,
+      "sha256": "1b67537d57f36fe8fc0127bd84371f61ded4174cd75385722183bb1d0a21cbd2"
+    },
+    "schools": {
+      "file": "schools_CAF.gpkg",
+      "bytes": 262144,
+      "sha256": "d250e231872e8c14a4562a872602531ee00d068067f9b97f4e70490e1a43899b"
+    },
+    "gadm": {
+      "file": "gadm41_CAF.gpkg",
+      "bytes": 1007616,
+      "sha256": "e1fcb5f4b9f5ed63ac1330b0d50250b77d5e26f66034d778b7cb6c01f92a791e"
+    },
+    "worldpop": {
+      "file": "caf_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 634587,
+      "sha256": "e248b7e75ed0ac56dea0bccc19b1504039d3be5951689b4a6e76be64576ff686"
+    },
+    "tmin": {
+      "file": "CAF_wc2.1_30s_tmin.tif",
+      "bytes": 10573034,
+      "sha256": "a2ddd5f8159c083b7fb2c719add633fe287275be3f9fc88556f5e9079daa646d"
+    },
+    "tmax": {
+      "file": "CAF_wc2.1_30s_tmax.tif",
+      "bytes": 13131053,
+      "sha256": "3f52ed08f01dbf329c7ecdddeb62c6e1ee3301ca0da1cf1d69c911b33da2c834"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "country": "KEN",
+  "generated_utc": "2026-11-23T17:34:29+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 23352,
+  "inputs": {
+    "ghsl": {
+      "file": "KEN_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 23920304,
+      "sha256": "b3d95f1d1268f1fe2d4a74c7f09c594aeeeb7aef32b76edc679bc3f930907a3b"
+    },
+    "schools": {
+      "file": "schools_KEN.gpkg",
+      "bytes": 3534848,
+      "sha256": "e586425ca26a5df3a0410d89bd58b1b5c45f5221f74b3f4863398636879db7ad"
+    },
+    "gadm": {
+      "file": "gadm41_KEN.gpkg",
+      "bytes": 47509504,
+      "sha256": "bc7411db50581d44e05a9f6ae745f47fe3045a6a70c142ce37e26ec9b1314c28"
+    },
+    "worldpop": {
+      "file": "ken_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 1608464,
+      "sha256": "73a2d4fd4b1fa1b3e59c9cda867b034dd4b1169e0b680b2d7f31d5b88a190005"
+    },
+    "tmin": {
+      "file": "KEN_wc2.1_30s_tmin.tif",
+      "bytes": 10199804,
+      "sha256": "b099efd989f45d7f85a6f4c845dbc4b801ad72a9b2691f84d26134629be2a14c"
+    },
+    "tmax": {
+      "file": "KEN_wc2.1_30s_tmax.tif",
+      "bytes": 12199537,
+      "sha256": "a807354b229e4205429cea9674620689a062d0cbd46c4829faa4316d111cb2c9"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "country": "BFA",
+  "generated_utc": "2026-11-23T17:28:03+00:00",
+  "code_commit": "035566d820139c24bfdae9657e1a5c8485c45e06",
+  "rows": 4462,
+  "inputs": {
+    "ghsl": {
+      "file": "BFA_Population_Clusters_EPSG4326.gpkg.zip",
+      "bytes": 4822455,
+      "sha256": "58f006a6ad8e2483929c39d4e2d0b3b05842231fb5ce7299b0860eaa20deb362"
+    },
+    "schools": {
+      "file": "schools_BFA.gpkg",
+      "bytes": 307200,
+      "sha256": "42b0fe421ceab236e67ee7c9cb24ada81e52372579eecb73dff3a47d393a4f8d"
+    },
+    "gadm": {
+      "file": "gadm41_BFA.gpkg",
+      "bytes": 4157440,
+      "sha256": "95dd48d210210249c85724d8a4100d2331aacaff7e97f9908743fec3b54d5a8b"
+    },
+    "worldpop": {
+      "file": "bfa_pop_2020_CN_1km_R2025A_UA_v1.tif",
+      "bytes": 1375883,
+      "sha256": "68dd54e6615e87325c3a95bab95c355e18772ca649942f1613465c3897ba95fc"
+    },
+    "tmin": {
+      "file": "BFA_wc2.1_30s_tmin.tif",
+      "bytes": 4849247,
+      "sha256": "8a392a0a2f92b42d1191789a4b372373e491a6f8c6d95ddad1db9e80da40d171"
+    },
+    "tmax": {
+      "file": "BFA_wc2.1_30s_tmax.tif",
+      "bytes": 5649604,
+      "sha256": "58565ad11d3e0752b3f8811a47a21a033ae232a9e82c60251476e5240e809428"
+    },
+    "rwi": {
+      "file": "rwi.tif",
+      "bytes": 967148934,
+      "sha256": "31dce7c6e88da2d11e72c30fae2d6f813921615a0eeec0aade1d2485717abdde"
+    },
+    "hdi_table": {
+      "file": "hdi_values.csv",
+      "bytes": 457,
+      "sha256": "29f54e6a4bbf330472231324d2f0d8fad46995bca8d06b2e9de1cc0f77f40afc"
+    },
+    "household_size_table": {
+      "file": "household_size_undesa2022.csv",
+      "bytes": 1191,
+      "sha256": "9b3530e60ec0abef0e336863368987cd0434027428e08c6b917048b15b2e86e9"
+    }
+  }
+}
