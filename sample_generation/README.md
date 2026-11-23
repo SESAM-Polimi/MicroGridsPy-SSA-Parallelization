@@ -12,7 +12,7 @@ python sample_generation/input_generator.py ZWE KEN --inputs /path/to/input_gene
 `input`: `Input/{ISO}/...` per country and `Global/rwi.tif`. These ~3 GB are not in this
 repository (to be published on Zenodo, checklist I05). Each country also needs
 `Input/{ISO}/{ISO}_wc2.1_30s_tmin.tif` and `..._tmax.tif` (WorldClim 2.1, 12 bands) and the
-WorldPop 2025 layer, which `fetch_worldpop.py` downloads:
+WorldPop 2020 layer, which `fetch_worldpop.py` downloads:
 
 ```
 python sample_generation/fetch_worldpop.py AGO SLE --inputs /path/to/input_generator
@@ -37,9 +37,11 @@ in place on 11 Nov 2026:
   (2024) classes (`history/patch_cooling_column.py`);
 - `h_tier1..5`: households from UN DESA household size (`history/patch_household_tiers.py`).
 
-Population year: the GHSL clusters carry the GHS-POP R2023A 2025 population, while the SPARSE
-clusters of the committed samples come from WorldPop 2020. From 20 Nov 2026 the generator reads
-WorldPop 2025 (`WORLDPOP_YEAR`), so both layers use the same year once the samples are regenerated.
+Population year: 2020 for both kinds of cluster. Despite the name, the population of the GHSL
+clusters matches WorldPop 2020 constrained (Global_2000_2020_Constrained, maxar_v1, 100 m) pixel by
+pixel, not GHS-POP 2025 (checked on AGO and DJI on 23 Nov 2026). The SPARSE clusters come from
+WorldPop R2025A, 2020, 1 km (`WORLDPOP_YEAR`): same year, different release. A short-lived change
+to WorldPop 2025 (PR #23) was reverted before any sample was generated with it.
 
 Sierra Leone is not in `data/sample_input_2025` until Matteo regenerates it (checklist I09): its
 2025 sample had the old cooling, hospital and household columns.

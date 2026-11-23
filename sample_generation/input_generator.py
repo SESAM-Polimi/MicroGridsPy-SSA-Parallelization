@@ -8,10 +8,10 @@ and the date, so a sample can be traced back to the exact source files.
 
 Source inputs (~3 GB, not in git): --inputs or $MGPY2_SAMPLE_INPUTS, the folder laid out as
 the `input_generator/` folder of branch `input`:
-    {inputs}/Input/{ISO}/{ISO}_Population_Clusters_EPSG4326.gpkg.zip   GHSL clusters (M-LED)
+    {inputs}/Input/{ISO}/{ISO}_Population_Clusters_EPSG4326.gpkg.zip   population clusters (JRC, F. Fahl)
     {inputs}/Input/{ISO}/schools_{ISO}.gpkg                             schools
     {inputs}/Input/{ISO}/gadm41_{ISO}.gpkg                              GADM 4.1 boundaries
-    {inputs}/Input/{ISO}/{iso}_pop_2025_CN_1km_R2025A_UA_v1.tif         WorldPop R2025A, 2025, 1 km
+    {inputs}/Input/{ISO}/{iso}_pop_2020_CN_1km_R2025A_UA_v1.tif         WorldPop R2025A, 2020, 1 km
     {inputs}/Input/{ISO}/{ISO}_wc2.1_30s_tmin.tif, ..._tmax.tif         WorldClim 2.1, 12 bands
     {inputs}/Global/rwi.tif                                             Relative Wealth Index
 The two small country tables (HDI, household size) are in sample_generation/tables/.
@@ -48,11 +48,12 @@ HDI_PATH = TABLES_ROOT / "hdi_values.csv"
 HOUSEHOLD_PATH = TABLES_ROOT / "household_size_undesa2022.csv"
 DEFAULT_OUT_ROOT = REPO_ROOT / "data" / "sample_input_2025"
 INPUTS_ENV = "MGPY2_SAMPLE_INPUTS"
-# Population year of the WorldPop layer (SPARSE clusters). Same year as the GHSL clusters
-# (GHS-POP R2023A, 2025 epoch), so one sample does not mix two years. Every year of WorldPop
-# R2025A (2015-2030) is modelled from the c.2010 and c.2020 census rounds and aligned to UN WPP
-# 2024; 2020 is not an observed year either. Get the files with fetch_worldpop.py.
-WORLDPOP_YEAR = 2025
+# Population year of the WorldPop layer (SPARSE clusters): 2020, the year of the committed
+# samples. The population of the "GHSL" clusters is also 2020: their pixel values match WorldPop
+# 2020 constrained (Global_2000_2020_Constrained, maxar_v1, 100 m), not GHS-POP 2025 (checked on
+# AGO and DJI, 23 Nov 2026). The two layers are still different WorldPop releases; which raster
+# the SPARSE clusters should use is open (checklist C24). Get the files with fetch_worldpop.py.
+WORLDPOP_YEAR = 2020
 POPULATION_THRESHOLD = 300
 CONNECTIVITY = 8
 SCHOOL_DISTANCE_M = 250
